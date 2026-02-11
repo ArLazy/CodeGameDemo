@@ -62,8 +62,8 @@
 
         .stats {
             display: flex;
-            gap: 20px;
-            font-size: 14px;
+            gap: 15px;
+            font-size: 13px;
             flex-wrap: wrap;
         }
 
@@ -120,7 +120,7 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
-            width: 450px;
+            width: 460px;
         }
 
         .console-section {
@@ -161,11 +161,11 @@
 
         button {
             flex: 1;
-            padding: 12px 20px;
+            padding: 12px 15px;
             border: none;
             border-radius: 6px;
             font-family: 'Courier New', monospace;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -219,8 +219,8 @@
             padding: 15px;
             border-radius: 8px;
             border: 2px solid #0f3460;
-            font-size: 12px;
-            line-height: 1.5;
+            font-size: 11px;
+            line-height: 1.4;
         }
 
         .instructions h3 {
@@ -245,29 +245,29 @@
         }
 
         .legend {
-            display: flex;
-            gap: 15px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
             margin-top: 10px;
-            flex-wrap: wrap;
         }
 
         .legend-item {
             display: flex;
             align-items: center;
             gap: 5px;
-            font-size: 11px;
+            font-size: 10px;
         }
 
         .legend-color {
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             border-radius: 3px;
             border: 1px solid #fff;
         }
 
         .legend-circle {
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
             border: 1px solid #fff;
         }
@@ -393,8 +393,8 @@ collect
 down 3
 drop
 
-Colors: yellow, green, blue
-Deliver to matching colored zones!"></textarea>
+Warning: Moving blocks move after each command!
+Teleporters instantly warp you to their pair!"></textarea>
             </div>
             
             <div class="button-group">
@@ -426,15 +426,15 @@ Deliver to matching colored zones!"></textarea>
                 <div class="legend">
                     <div class="legend-item">
                         <div class="legend-circle" style="background: #ffd700;"></div>
-                        <span>Yellow Resource</span>
+                        <span>Yellow Coin</span>
                     </div>
                     <div class="legend-item">
                         <div class="legend-circle" style="background: #4ecca3;"></div>
-                        <span>Green Resource</span>
+                        <span>Green Coin</span>
                     </div>
                     <div class="legend-item">
                         <div class="legend-circle" style="background: #3498db;"></div>
-                        <span>Blue Resource</span>
+                        <span>Blue Coin</span>
                     </div>
                     <div class="legend-item">
                         <div class="legend-color" style="background: #b8860b;"></div>
@@ -447,6 +447,14 @@ Deliver to matching colored zones!"></textarea>
                     <div class="legend-item">
                         <div class="legend-color" style="background: #1e6091;"></div>
                         <span>Blue Drop</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #9932cc;"></div>
+                        <span>Teleporter</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ff6600;"></div>
+                        <span>Moving Block!</span>
                     </div>
                     <div class="legend-item">
                         <div class="legend-color" style="background: #8b0000;"></div>
@@ -471,7 +479,9 @@ Deliver to matching colored zones!"></textarea>
         const COLORS = {
             yellow: { resource: '#ffd700', drop: '#b8860b', light: '#ffeb99' },
             green: { resource: '#4ecca3', drop: '#2e8b57', light: '#99ffcc' },
-            blue: { resource: '#3498db', drop: '#1e6091', light: '#99ccff' }
+            blue: { resource: '#3498db', drop: '#1e6091', light: '#99ccff' },
+            teleporter: '#9932cc',
+            movingBlock: '#ff6600'
         };
         
         const initialState = {
@@ -481,6 +491,8 @@ Deliver to matching colored zones!"></textarea>
             walls: [],
             dangerZones: [],
             dropZones: [],
+            teleporters: [],
+            movingBlocks: [],
             inventory: [],
             delivered: 0,
             totalResources: 0,
@@ -492,7 +504,8 @@ Deliver to matching colored zones!"></textarea>
             originalResources: [],
             originalGrid: [],
             originalInventory: [],
-            originalDelivered: 0
+            originalDelivered: 0,
+            originalMovingBlocks: []
         };
 
         let gameState = JSON.parse(JSON.stringify(initialState));
@@ -519,6 +532,8 @@ Deliver to matching colored zones!"></textarea>
             gameState.walls = [];
             gameState.dangerZones = [];
             gameState.dropZones = [];
+            gameState.teleporters = [];
+            gameState.movingBlocks = [];
             gameState.inventory = [];
             gameState.delivered = 0;
             gameState.totalResources = 0;
@@ -527,8 +542,8 @@ Deliver to matching colored zones!"></textarea>
             gameState.gameEnded = false;
             gameState.playerDead = false;
             
-            // Generate walls (12-20 walls)
-            const wallCount = Math.floor(Math.random() * 9) + 12;
+            // Generate walls (10-18 walls)
+            const wallCount = Math.floor(Math.random() * 9) + 10;
             for (let i = 0; i < wallCount; i++) {
                 let x, y;
                 do {
@@ -551,6 +566,58 @@ Deliver to matching colored zones!"></textarea>
                 
                 gameState.grid[y][x] = 'danger';
                 gameState.dangerZones.push({ x, y });
+            }
+            
+            // Generate teleporter pairs (2-3 pairs)
+            const teleporterCount = Math.floor(Math.random() * 2) + 2;
+            for (let i = 0; i < teleporterCount; i++) {
+                let x1, y1, x2, y2;
+                
+                // First teleporter
+                do {
+                    x1 = Math.floor(Math.random() * GRID_SIZE);
+                    y1 = Math.floor(Math.random() * GRID_SIZE);
+                } while ((x1 === 0 && y1 === 0) || gameState.grid[y1][x1] !== 'empty');
+                
+                gameState.grid[y1][x1] = `teleporter_${i}`;
+                
+                // Second teleporter (paired)
+                do {
+                    x2 = Math.floor(Math.random() * GRID_SIZE);
+                    y2 = Math.floor(Math.random() * GRID_SIZE);
+                } while ((x2 === 0 && y2 === 0) || gameState.grid[y2][x2] !== 'empty' || 
+                         (x1 === x2 && y1 === y2));
+                
+                gameState.grid[y2][x2] = `teleporter_${i}`;
+                
+                gameState.teleporters.push({
+                    id: i,
+                    pair: [{ x: x1, y: y1 }, { x: x2, y: y2 }]
+                });
+            }
+            
+            // Generate moving blocks (2-3 moving blocks)
+            const movingBlockCount = Math.floor(Math.random() * 2) + 2;
+            for (let i = 0; i < movingBlockCount; i++) {
+                let x, y;
+                do {
+                    x = Math.floor(Math.random() * GRID_SIZE);
+                    y = Math.floor(Math.random() * GRID_SIZE);
+                } while ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty');
+                
+                // Determine movement direction (horizontal or vertical)
+                const isHorizontal = Math.random() > 0.5;
+                const dx = isHorizontal ? (Math.random() > 0.5 ? 1 : -1) : 0;
+                const dy = isHorizontal ? 0 : (Math.random() > 0.5 ? 1 : -1);
+                
+                gameState.grid[y][x] = 'moving_block';
+                gameState.movingBlocks.push({
+                    x: x,
+                    y: y,
+                    dx: dx,
+                    dy: dy,
+                    id: i
+                });
             }
             
             // Generate resources and drop zones for each color
@@ -588,7 +655,7 @@ Deliver to matching colored zones!"></textarea>
             // Clear history and update status
             clearHistory();
             addToHistory('New task generated!', 'info');
-            addToHistory(`Collect ${gameState.totalResources} resources and deliver to matching zones!`, 'info');
+            addToHistory(`Collect ${gameState.totalResources} resources and deliver! Watch out for moving blocks!`, 'info');
             updateStatus('Task ready - Write your code!', 'waiting');
             updateStats();
             draw();
@@ -601,6 +668,7 @@ Deliver to matching colored zones!"></textarea>
             gameState.originalGrid = gameState.grid.map(row => [...row]);
             gameState.originalInventory = [];
             gameState.originalDelivered = 0;
+            gameState.originalMovingBlocks = gameState.movingBlocks.map(b => ({ ...b }));
         }
 
         // Restart game with same layout
@@ -614,6 +682,7 @@ Deliver to matching colored zones!"></textarea>
             gameState.player = { ...gameState.originalPlayer };
             gameState.resources = gameState.originalResources.map(r => ({ ...r }));
             gameState.grid = gameState.originalGrid.map(row => [...row]);
+            gameState.movingBlocks = gameState.originalMovingBlocks.map(b => ({ ...b }));
             gameState.inventory = [];
             gameState.delivered = 0;
             gameState.steps = 0;
@@ -646,7 +715,7 @@ Deliver to matching colored zones!"></textarea>
                 ctx.stroke();
             }
             
-            // Draw drop zones (lighter colored cells)
+            // Draw drop zones
             gameState.dropZones.forEach(drop => {
                 ctx.fillStyle = COLORS[drop.color].drop;
                 ctx.fillRect(
@@ -656,7 +725,6 @@ Deliver to matching colored zones!"></textarea>
                     CELL_SIZE - 2
                 );
                 
-                // Draw letter indicating drop zone
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
                 ctx.font = 'bold 16px Courier New';
                 ctx.textAlign = 'center';
@@ -668,7 +736,7 @@ Deliver to matching colored zones!"></textarea>
                 );
             });
             
-            // Draw danger zones (red cells)
+            // Draw danger zones
             gameState.dangerZones.forEach(danger => {
                 ctx.fillStyle = '#8b0000';
                 ctx.fillRect(
@@ -678,7 +746,6 @@ Deliver to matching colored zones!"></textarea>
                     CELL_SIZE - 2
                 );
                 
-                // Add hazard pattern
                 ctx.strokeStyle = '#ff4444';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
@@ -689,6 +756,43 @@ Deliver to matching colored zones!"></textarea>
                 ctx.moveTo((danger.x + 1) * CELL_SIZE - 5, danger.y * CELL_SIZE + 5);
                 ctx.lineTo(danger.x * CELL_SIZE + 5, (danger.y + 1) * CELL_SIZE - 5);
                 ctx.stroke();
+            });
+            
+            // Draw teleporters
+            gameState.teleporters.forEach((teleporter, idx) => {
+                teleporter.pair.forEach((pos, pairIdx) => {
+                    ctx.fillStyle = COLORS.teleporter;
+                    ctx.fillRect(
+                        pos.x * CELL_SIZE + 2,
+                        pos.y * CELL_SIZE + 2,
+                        CELL_SIZE - 4,
+                        CELL_SIZE - 4
+                    );
+                    
+                    // Draw teleporter symbol
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(
+                        pos.x * CELL_SIZE + CELL_SIZE / 2,
+                        pos.y * CELL_SIZE + CELL_SIZE / 2,
+                        CELL_SIZE / 4,
+                        0,
+                        Math.PI * 2
+                    );
+                    ctx.stroke();
+                    
+                    // Draw pair indicator
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 12px Courier New';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(
+                        String.fromCharCode(65 + idx),
+                        pos.x * CELL_SIZE + CELL_SIZE / 2,
+                        pos.y * CELL_SIZE + CELL_SIZE / 2
+                    );
+                });
             });
             
             // Draw walls
@@ -716,12 +820,44 @@ Deliver to matching colored zones!"></textarea>
                     );
                     ctx.fill();
                     
-                    // Glow effect
                     ctx.shadowColor = COLORS[resource.color].resource;
                     ctx.shadowBlur = 10;
                     ctx.fill();
                     ctx.shadowBlur = 0;
                 }
+            });
+            
+            // Draw moving blocks
+            gameState.movingBlocks.forEach(block => {
+                ctx.fillStyle = COLORS.movingBlock;
+                ctx.fillRect(
+                    block.x * CELL_SIZE + 4,
+                    block.y * CELL_SIZE + 4,
+                    CELL_SIZE - 8,
+                    CELL_SIZE - 8
+                );
+                
+                // Draw spikes pattern
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(block.x * CELL_SIZE + 8 + i * 8, block.y * CELL_SIZE + 8);
+                    ctx.lineTo(block.x * CELL_SIZE + 12 + i * 8, block.y * CELL_SIZE + 12);
+                    ctx.lineTo(block.x * CELL_SIZE + 8 + i * 8, block.y * CELL_SIZE + 16);
+                    ctx.stroke();
+                }
+                
+                // Glow effect
+                ctx.shadowColor = COLORS.movingBlock;
+                ctx.shadowBlur = 10;
+                ctx.strokeRect(
+                    block.x * CELL_SIZE + 4,
+                    block.y * CELL_SIZE + 4,
+                    CELL_SIZE - 8,
+                    CELL_SIZE - 8
+                );
+                ctx.shadowBlur = 0;
             });
             
             // Draw player
@@ -734,7 +870,6 @@ Deliver to matching colored zones!"></textarea>
                     CELL_SIZE - 10
                 );
                 
-                // Player glow
                 ctx.shadowColor = '#4ecca3';
                 ctx.shadowBlur = 15;
                 ctx.fillRect(
@@ -745,7 +880,6 @@ Deliver to matching colored zones!"></textarea>
                 );
                 ctx.shadowBlur = 0;
                 
-                // Draw inventory indicator on player
                 if (gameState.inventory.length > 0) {
                     ctx.fillStyle = COLORS[gameState.inventory[0]].resource;
                     ctx.beginPath();
@@ -759,6 +893,104 @@ Deliver to matching colored zones!"></textarea>
                     ctx.fill();
                 }
             }
+        }
+
+        // Move all moving blocks
+        function moveMovingBlocks() {
+            gameState.movingBlocks.forEach(block => {
+                // Clear old position from grid
+                if (gameState.grid[block.y][block.x] === 'moving_block') {
+                    gameState.grid[block.y][block.x] = 'empty';
+                }
+                
+                let newX = block.x + block.dx;
+                let newY = block.y + block.dy;
+                
+                // Check if movement is valid (no walls, bounds, danger)
+                let shouldBounce = false;
+                
+                if (newX < 0 || newX >= GRID_SIZE || newY < 0 || newY >= GRID_SIZE) {
+                    shouldBounce = true;
+                } else if (gameState.grid[newY][newX] === 'wall' || 
+                          gameState.grid[newY][newX] === 'danger' ||
+                          gameState.grid[newY][newX].startsWith('teleporter') ||
+                          gameState.grid[newY][newX].startsWith('drop_')) {
+                    shouldBounce = true;
+                }
+                
+                // Check collision with other moving blocks
+                const otherBlock = gameState.movingBlocks.find(b => 
+                    b.id !== block.id && b.x === newX && b.y === newY
+                );
+                if (otherBlock) {
+                    shouldBounce = true;
+                }
+                
+                // Check collision with resources
+                const resourceAtPos = gameState.resources.find(r => 
+                    !r.collected && r.x === newX && r.y === newY
+                );
+                if (resourceAtPos) {
+                    shouldBounce = true;
+                }
+                
+                if (shouldBounce) {
+                    // Reverse direction
+                    block.dx = -block.dx;
+                    block.dy = -block.dy;
+                    newX = block.x + block.dx;
+                    newY = block.y + block.dy;
+                    
+                    // Check if can move in new direction
+                    if (newX < 0 || newX >= GRID_SIZE || newY < 0 || newY >= GRID_SIZE ||
+                        gameState.grid[newY][newX] === 'wall' || 
+                        gameState.grid[newY][newX] === 'danger' ||
+                        gameState.grid[newY][newX].startsWith('teleporter') ||
+                        gameState.grid[newY][newX].startsWith('drop_') ||
+                        gameState.movingBlocks.some(b => b.id !== block.id && b.x === newX && b.y === newY)) {
+                        // Can't move, stay in place
+                        newX = block.x;
+                        newY = block.y;
+                    }
+                }
+                
+                block.x = newX;
+                block.y = newY;
+                
+                // Update grid
+                gameState.grid[block.y][block.x] = 'moving_block';
+            });
+        }
+
+        // Check if player collides with moving blocks
+        function checkMovingBlockCollision() {
+            const hitBlock = gameState.movingBlocks.find(b => 
+                b.x === gameState.player.x && b.y === gameState.player.y
+            );
+            return hitBlock !== undefined;
+        }
+
+        // Check and handle teleporter
+        function checkTeleporter() {
+            const cellType = gameState.grid[gameState.player.y][gameState.player.x];
+            if (cellType.startsWith('teleporter_')) {
+                const teleporterId = parseInt(cellType.split('_')[1]);
+                const teleporter = gameState.teleporters.find(t => t.id === teleporterId);
+                
+                if (teleporter) {
+                    // Find the other end of the teleporter pair
+                    const destination = teleporter.pair.find(p => 
+                        p.x !== gameState.player.x || p.y !== gameState.player.y
+                    );
+                    
+                    if (destination) {
+                        gameState.player.x = destination.x;
+                        gameState.player.y = destination.y;
+                        return { teleported: true, message: `Teleported to (${destination.x}, ${destination.y})!` };
+                    }
+                }
+            }
+            return { teleported: false };
         }
 
         // Execute commands
@@ -795,19 +1027,16 @@ Deliver to matching colored zones!"></textarea>
                 let result;
                 
                 if (command === 'bye') {
-                    // bye command - parse direction and optional "while coin"
                     const direction = parts[1] ? parts[1].toLowerCase() : null;
                     if (!direction || !['up', 'down', 'left', 'right'].includes(direction)) {
-                        result = { success: false, message: 'bye command requires a valid direction (up/down/left/right)' };
+                        result = { success: false, message: 'bye command requires a valid direction' };
                     } else {
-                        // Check for "while coin" modifier
                         const whileCoin = parts.length >= 4 && 
                                          parts[2].toLowerCase() === 'while' && 
                                          parts[3].toLowerCase() === 'coin';
                         result = await executeByeCommand(direction, whileCoin);
                     }
                 } else if (['up', 'down', 'left', 'right'].includes(command)) {
-                    // Movement command with optional coefficient
                     const coefficient = parts[1] ? parseInt(parts[1]) : 1;
                     if (isNaN(coefficient) || coefficient < 1) {
                         result = { success: false, message: `Invalid coefficient: "${parts[1]}"` };
@@ -816,8 +1045,40 @@ Deliver to matching colored zones!"></textarea>
                     }
                 } else if (command === 'collect') {
                     result = collectResource();
+                    // Move blocks after collect command too
+                    if (result.success) {
+                        moveMovingBlocks();
+                        if (checkMovingBlockCollision()) {
+                            gameState.playerDead = true;
+                            gameState.gameEnded = true;
+                            draw();
+                            updateStatus('GAME OVER - Crushed by moving block!', 'dead');
+                            addToHistory('💀 You were hit by a moving block!', 'dead');
+                            gameState.isRunning = false;
+                            return;
+                        }
+                        const teleportResult = checkTeleporter();
+                        if (teleportResult.teleported) {
+                            addToHistory(teleportResult.message, 'success');
+                        }
+                        draw();
+                    }
                 } else if (command === 'drop') {
                     result = dropResource();
+                    // Move blocks after drop command too
+                    if (result.success) {
+                        moveMovingBlocks();
+                        if (checkMovingBlockCollision()) {
+                            gameState.playerDead = true;
+                            gameState.gameEnded = true;
+                            draw();
+                            updateStatus('GAME OVER - Crushed by moving block!', 'dead');
+                            addToHistory('💀 You were hit by a moving block!', 'dead');
+                            gameState.isRunning = false;
+                            return;
+                        }
+                        draw();
+                    }
                 } else {
                     result = { success: false, message: `Unknown command: "${command}"` };
                 }
@@ -846,8 +1107,7 @@ Deliver to matching colored zones!"></textarea>
                     return;
                 }
                 
-                // Small delay for visualization
-                await sleep(200);
+                await sleep(250);
             }
             
             gameState.isRunning = false;
@@ -861,7 +1121,7 @@ Deliver to matching colored zones!"></textarea>
             }
         }
 
-        // Execute bye command (move until blocked or coin found)
+        // Execute bye command
         async function executeByeCommand(direction, whileCoin) {
             let dx = 0, dy = 0;
             switch (direction) {
@@ -877,17 +1137,14 @@ Deliver to matching colored zones!"></textarea>
                 const newX = gameState.player.x + dx;
                 const newY = gameState.player.y + dy;
                 
-                // Check bounds
                 if (newX < 0 || newX >= GRID_SIZE || newY < 0 || newY >= GRID_SIZE) {
                     break;
                 }
                 
-                // Check walls
                 if (gameState.grid[newY][newX] === 'wall') {
                     break;
                 }
                 
-                // Check danger zones
                 if (gameState.grid[newY][newX] === 'danger') {
                     gameState.player.x = newX;
                     gameState.player.y = newY;
@@ -901,16 +1158,56 @@ Deliver to matching colored zones!"></textarea>
                     };
                 }
                 
-                // Move player
+                // Check for moving block collision
+                if (gameState.grid[newY][newX] === 'moving_block') {
+                    gameState.player.x = newX;
+                    gameState.player.y = newY;
+                    moveCount++;
+                    gameState.steps++;
+                    draw();
+                    return {
+                        success: false,
+                        dead: true,
+                        message: `Moved ${direction} ${moveCount} time(s) and got crushed by a moving block! 💀`
+                    };
+                }
+                
                 gameState.player.x = newX;
                 gameState.player.y = newY;
                 moveCount++;
                 gameState.steps++;
                 
-                draw();
-                await sleep(150);
+                // Move blocks after each step
+                moveMovingBlocks();
                 
-                // Check for coin if whileCoin is enabled
+                // Check collision after blocks move
+                if (checkMovingBlockCollision()) {
+                    draw();
+                    return {
+                        success: false,
+                        dead: true,
+                        message: `Moved ${direction} ${moveCount} time(s) - Moving block crushed you! 💀`
+                    };
+                }
+                
+                // Check teleporter
+                const teleportResult = checkTeleporter();
+                if (teleportResult.teleported) {
+                    draw();
+                    addToHistory(teleportResult.message, 'success');
+                    // After teleport, check for moving block at destination
+                    if (checkMovingBlockCollision()) {
+                        return {
+                            success: false,
+                            dead: true,
+                            message: 'Teleported into a moving block! 💀'
+                        };
+                    }
+                }
+                
+                draw();
+                await sleep(200);
+                
                 if (whileCoin) {
                     const resource = gameState.resources.find(
                         r => r.x === gameState.player.x && r.y === gameState.player.y && !r.collected
@@ -929,7 +1226,7 @@ Deliver to matching colored zones!"></textarea>
             return { success: true, message: `Moved ${direction} ${moveCount} time(s) ${condition}` };
         }
 
-        // Execute movement command with coefficient
+        // Execute movement command
         async function executeMovementCommand(direction, coefficient) {
             let dx = 0, dy = 0;
             switch (direction) {
@@ -954,8 +1251,35 @@ Deliver to matching colored zones!"></textarea>
                     }
                 }
                 
+                // Move blocks after each step
+                moveMovingBlocks();
+                
+                // Check collision after blocks move
+                if (checkMovingBlockCollision()) {
+                    draw();
+                    return {
+                        success: false,
+                        dead: true,
+                        message: `Moved ${direction} ${i + 1} time(s) - Moving block crushed you! 💀`
+                    };
+                }
+                
+                // Check teleporter
+                const teleportResult = checkTeleporter();
+                if (teleportResult.teleported) {
+                    addToHistory(teleportResult.message, 'success');
+                    // After teleport, check for moving block at destination
+                    if (checkMovingBlockCollision()) {
+                        return {
+                            success: false,
+                            dead: true,
+                            message: 'Teleported into a moving block! 💀'
+                        };
+                    }
+                }
+                
                 draw();
-                await sleep(150);
+                await sleep(200);
             }
             
             return { success: true, message: `Moved ${direction} ${coefficient} time(s)` };
@@ -966,17 +1290,14 @@ Deliver to matching colored zones!"></textarea>
             const newX = gameState.player.x + dx;
             const newY = gameState.player.y + dy;
             
-            // Check bounds
             if (newX < 0 || newX >= GRID_SIZE || newY < 0 || newY >= GRID_SIZE) {
                 return { success: false, message: 'Cannot move: Out of bounds!' };
             }
             
-            // Check walls
             if (gameState.grid[newY][newX] === 'wall') {
                 return { success: false, message: 'Cannot move: Wall in the way!' };
             }
             
-            // Check danger zones
             if (gameState.grid[newY][newX] === 'danger') {
                 gameState.player.x = newX;
                 gameState.player.y = newY;
@@ -984,6 +1305,16 @@ Deliver to matching colored zones!"></textarea>
                     success: false, 
                     dead: true,
                     message: 'You entered a DANGER ZONE and died! 💀' 
+                };
+            }
+            
+            if (gameState.grid[newY][newX] === 'moving_block') {
+                gameState.player.x = newX;
+                gameState.player.y = newY;
+                return {
+                    success: false,
+                    dead: true,
+                    message: 'You walked into a moving block and got crushed! 💀'
                 };
             }
             
@@ -1014,9 +1345,8 @@ Deliver to matching colored zones!"></textarea>
             return { success: false, message: 'No resource to collect at current position!' };
         }
 
-        // Drop/deliver resource
+        // Drop resource
         function dropResource() {
-            // Check if player is on a drop zone
             const dropZone = gameState.dropZones.find(
                 d => d.x === gameState.player.x && d.y === gameState.player.y
             );
@@ -1025,21 +1355,18 @@ Deliver to matching colored zones!"></textarea>
                 return { success: false, message: 'Not on a delivery zone! Find a colored base.' };
             }
             
-            // Check if player has resources of matching color
             const matchingResources = gameState.inventory.filter(color => color === dropZone.color);
             
             if (matchingResources.length === 0) {
                 return { success: false, message: `No ${dropZone.color} resources to deliver here!` };
             }
             
-            // Deliver all matching resources
             let deliveredCount = 0;
             gameState.inventory = gameState.inventory.filter(color => {
                 if (color === dropZone.color) {
                     deliveredCount++;
                     gameState.delivered++;
                     
-                    // Mark the corresponding resource as delivered
                     const resource = gameState.resources.find(
                         r => r.color === color && r.collected && !r.delivered
                     );
@@ -1072,7 +1399,6 @@ Deliver to matching colored zones!"></textarea>
             document.getElementById('healthStatus').style.color = 
                 gameState.playerDead ? '#ff4444' : '#4ecca3';
             
-            // Update inventory display
             document.getElementById('inventoryCount').textContent = 
                 `${gameState.inventory.length}/${MAX_INVENTORY}`;
             
