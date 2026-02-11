@@ -64,6 +64,7 @@
             display: flex;
             gap: 20px;
             font-size: 14px;
+            flex-wrap: wrap;
         }
 
         .stat {
@@ -154,6 +155,17 @@
             box-shadow: 0 4px 15px rgba(78, 204, 163, 0.4);
         }
 
+        .btn-restart {
+            background: #f39c12;
+            color: #1a1a2e;
+        }
+
+        .btn-restart:hover {
+            background: #f5b041;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(243, 156, 18, 0.4);
+        }
+
         .btn-clear {
             background: #533483;
             color: white;
@@ -225,6 +237,11 @@
             color: #fff;
         }
 
+        .status-dead {
+            background: #8b0000;
+            color: #fff;
+        }
+
         .command-history {
             background: #0a0a14;
             padding: 10px;
@@ -248,6 +265,11 @@
 
         .command-info {
             color: #f39c12;
+        }
+
+        .command-dead {
+            color: #ff4444;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -273,6 +295,10 @@
                         <span>Pos:</span>
                         <span class="stat-value" id="playerPos">0,0</span>
                     </div>
+                    <div class="stat">
+                        <span>Health:</span>
+                        <span class="stat-value" id="healthStatus">OK</span>
+                    </div>
                 </div>
             </div>
             
@@ -286,18 +312,19 @@
                 <div class="console-header">Command Console</div>
                 <textarea id="commandInput" placeholder="Enter your commands here...
 
-Example:
-right
-down
+Example with coefficients:
+right 3
+down 2
 collect
-right
+bye right
 collect
-up
-collect"></textarea>
+
+The bye command moves until blocked."></textarea>
             </div>
             
             <div class="button-group">
                 <button class="btn-generate" onclick="generateTask()">Generate Task</button>
+                <button class="btn-restart" onclick="restartGame()">Restart</button>
                 <button class="btn-run" onclick="runCommands()">Run Code</button>
                 <button class="btn-clear" onclick="clearConsole()">Clear</button>
             </div>
@@ -312,14 +339,15 @@ collect"></textarea>
             <div class="instructions">
                 <h3>Available Commands</h3>
                 <ul>
-                    <li><code>up</code> - Move up</li>
-                    <li><code>down</code> - Move down</li>
-                    <li><code>left</code> - Move left</li>
-                    <li><code>right</code> - Move right</li>
+                    <li><code>up [n]</code> - Move up (n times, default 1)</li>
+                    <li><code>down [n]</code> - Move down (n times, default 1)</li>
+                    <li><code>left [n]</code> - Move left (n times, default 1)</li>
+                    <li><code>right [n]</code> - Move right (n times, default 1)</li>
+                    <li><code>bye [direction]</code> - Move in direction until blocked</li>
                     <li><code>collect</code> - Collect resource at current position</li>
                 </ul>
                 <p style="margin-top: 10px;">
-                    <strong>Goal:</strong> Collect all resources (yellow) by writing a sequence of commands. Avoid walls (gray). Your code runs in one iteration - plan carefully!
+                    <strong>Goal:</strong> Collect all resources (yellow). Avoid walls (gray) and <span style="color: #ff4444; font-weight: bold;">DANGER ZONES (red)</span> - touching them kills you! Your code runs in one iteration.
                 </p>
             </div>
         </div>
@@ -331,17 +359,24 @@ collect"></textarea>
         const GRID_SIZE = 10;
         const CELL_SIZE = 40;
         
-        let gameState = {
+        const initialState = {
             grid: [],
             player: { x: 0, y: 0 },
             resources: [],
             walls: [],
+            dangerZones: [],
             collected: 0,
             totalResources: 0,
             steps: 0,
             isRunning: false,
-            gameEnded: false
+            gameEnded: false,
+            playerDead: false,
+            originalPlayer: { x: 0, y: 0 },
+            originalResources: [],
+            originalGrid: []
         };
+
+        let gameState = JSON.parse(JSON.stringify(initialState));
 
         // Initialize empty grid
         function initGrid() {
@@ -360,13 +395,16 @@ collect"></textarea>
             
             // Reset game state
             gameState.player = { x: 0, y: 0 };
+            gameState.originalPlayer = { x: 0, y: 0 };
             gameState.resources = [];
             gameState.walls = [];
+            gameState.dangerZones = [];
             gameState.collected = 0;
             gameState.totalResources = 0;
             gameState.steps = 0;
             gameState.isRunning = false;
             gameState.gameEnded = false;
+            gameState.playerDead = false;
             
             // Generate walls (15-25 walls)
             const wallCount = Math.floor(Math.random() * 11) + 15;
@@ -379,6 +417,19 @@ collect"></textarea>
                 
                 gameState.grid[y][x] = 'wall';
                 gameState.walls.push({ x, y });
+            }
+            
+            // Generate danger zones (5-8 red cells)
+            const dangerCount = Math.floor(Math.random() * 4) + 5;
+            for (let i = 0; i < dangerCount; i++) {
+                let x, y;
+                do {
+                    x = Math.floor(Math.random() * GRID_SIZE);
+                    y = Math.floor(Math.random() * GRID_SIZE);
+                } while ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty');
+                
+                gameState.grid[y][x] = 'danger';
+                gameState.dangerZones.push({ x, y });
             }
             
             // Generate resources (5-10 resources)
@@ -396,10 +447,44 @@ collect"></textarea>
             
             gameState.totalResources = resourceCount;
             
+            // Store original state for restart
+            saveOriginalState();
+            
             // Clear history and update status
             clearHistory();
             addToHistory('New task generated!', 'info');
             updateStatus('Task ready - Write your code!', 'waiting');
+            updateStats();
+            draw();
+        }
+
+        // Save original state for restart
+        function saveOriginalState() {
+            gameState.originalPlayer = { ...gameState.player };
+            gameState.originalResources = gameState.resources.map(r => ({ ...r }));
+            gameState.originalGrid = gameState.grid.map(row => [...row]);
+        }
+
+        // Restart game with same layout
+        function restartGame() {
+            if (gameState.originalGrid.length === 0) {
+                addToHistory('No task to restart. Generate a task first!', 'error');
+                return;
+            }
+            
+            // Restore original state
+            gameState.player = { ...gameState.originalPlayer };
+            gameState.resources = gameState.originalResources.map(r => ({ ...r }));
+            gameState.grid = gameState.originalGrid.map(row => [...row]);
+            gameState.collected = 0;
+            gameState.steps = 0;
+            gameState.isRunning = false;
+            gameState.gameEnded = false;
+            gameState.playerDead = false;
+            
+            clearHistory();
+            addToHistory('Game restarted with same layout!', 'info');
+            updateStatus('Task restarted - Write your code!', 'waiting');
             updateStats();
             draw();
         }
@@ -421,6 +506,29 @@ collect"></textarea>
                 ctx.lineTo(GRID_SIZE * CELL_SIZE, i * CELL_SIZE);
                 ctx.stroke();
             }
+            
+            // Draw danger zones (red cells)
+            gameState.dangerZones.forEach(danger => {
+                ctx.fillStyle = '#8b0000';
+                ctx.fillRect(
+                    danger.x * CELL_SIZE + 1,
+                    danger.y * CELL_SIZE + 1,
+                    CELL_SIZE - 2,
+                    CELL_SIZE - 2
+                );
+                
+                // Add hazard pattern
+                ctx.strokeStyle = '#ff4444';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(danger.x * CELL_SIZE + 5, danger.y * CELL_SIZE + 5);
+                ctx.lineTo((danger.x + 1) * CELL_SIZE - 5, (danger.y + 1) * CELL_SIZE - 5);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo((danger.x + 1) * CELL_SIZE - 5, danger.y * CELL_SIZE + 5);
+                ctx.lineTo(danger.x * CELL_SIZE + 5, (danger.y + 1) * CELL_SIZE - 5);
+                ctx.stroke();
+            });
             
             // Draw walls
             ctx.fillStyle = '#555';
@@ -456,32 +564,36 @@ collect"></textarea>
             });
             
             // Draw player
-            ctx.fillStyle = '#4ecca3';
-            ctx.fillRect(
-                gameState.player.x * CELL_SIZE + 5,
-                gameState.player.y * CELL_SIZE + 5,
-                CELL_SIZE - 10,
-                CELL_SIZE - 10
-            );
-            
-            // Player glow
-            ctx.shadowColor = '#4ecca3';
-            ctx.shadowBlur = 15;
-            ctx.fillRect(
-                gameState.player.x * CELL_SIZE + 5,
-                gameState.player.y * CELL_SIZE + 5,
-                CELL_SIZE - 10,
-                CELL_SIZE - 10
-            );
-            ctx.shadowBlur = 0;
+            if (!gameState.playerDead) {
+                ctx.fillStyle = '#4ecca3';
+                ctx.fillRect(
+                    gameState.player.x * CELL_SIZE + 5,
+                    gameState.player.y * CELL_SIZE + 5,
+                    CELL_SIZE - 10,
+                    CELL_SIZE - 10
+                );
+                
+                // Player glow
+                ctx.shadowColor = '#4ecca3';
+                ctx.shadowBlur = 15;
+                ctx.fillRect(
+                    gameState.player.x * CELL_SIZE + 5,
+                    gameState.player.y * CELL_SIZE + 5,
+                    CELL_SIZE - 10,
+                    CELL_SIZE - 10
+                );
+                ctx.shadowBlur = 0;
+            }
         }
 
         // Execute commands
         async function runCommands() {
-            if (gameState.isRunning || gameState.gameEnded) {
-                if (gameState.gameEnded) {
-                    addToHistory('Game ended. Generate new task to play again.', 'error');
-                }
+            if (gameState.isRunning) {
+                return;
+            }
+            
+            if (gameState.gameEnded) {
+                addToHistory('Game ended. Restart or generate new task to play again.', 'error');
                 return;
             }
             
@@ -496,23 +608,53 @@ collect"></textarea>
             clearHistory();
             addToHistory('Starting execution...', 'info');
             
-            const commands = input.split('\n').map(cmd => cmd.trim().toLowerCase()).filter(cmd => cmd);
+            const lines = input.split('\n').map(line => line.trim()).filter(line => line);
             
-            for (let i = 0; i < commands.length; i++) {
-                const command = commands[i];
-                addToHistory(`> ${command}`, 'info');
+            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                const line = lines[lineIndex];
+                const parts = line.split(/\s+/);
+                const command = parts[0].toLowerCase();
                 
-                const result = await executeCommand(command);
+                addToHistory(`> ${line}`, 'info');
+                
+                let result;
+                
+                if (command === 'bye') {
+                    // bye command - move until blocked
+                    const direction = parts[1] ? parts[1].toLowerCase() : null;
+                    if (!direction || !['up', 'down', 'left', 'right'].includes(direction)) {
+                        result = { success: false, message: 'bye command requires a valid direction (up/down/left/right)' };
+                    } else {
+                        result = await executeByeCommand(direction);
+                    }
+                } else if (['up', 'down', 'left', 'right'].includes(command)) {
+                    // Movement command with optional coefficient
+                    const coefficient = parts[1] ? parseInt(parts[1]) : 1;
+                    if (isNaN(coefficient) || coefficient < 1) {
+                        result = { success: false, message: `Invalid coefficient: "${parts[1]}"` };
+                    } else {
+                        result = await executeMovementCommand(command, coefficient);
+                    }
+                } else if (command === 'collect') {
+                    result = collectResource();
+                } else {
+                    result = { success: false, message: `Unknown command: "${command}"` };
+                }
                 
                 if (result.success) {
                     addToHistory(result.message, 'success');
                 } else {
-                    addToHistory(result.message, 'error');
+                    addToHistory(result.message, result.dead ? 'dead' : 'error');
+                    if (result.dead) {
+                        gameState.playerDead = true;
+                        gameState.gameEnded = true;
+                        draw();
+                        updateStatus('GAME OVER - You died!', 'dead');
+                        gameState.isRunning = false;
+                        return;
+                    }
                     break;
                 }
-                
-                // Small delay for visualization
-                await sleep(300);
                 
                 // Check win condition
                 if (gameState.collected === gameState.totalResources) {
@@ -522,47 +664,109 @@ collect"></textarea>
                     gameState.isRunning = false;
                     return;
                 }
+                
+                // Small delay for visualization
+                await sleep(200);
             }
             
             gameState.isRunning = false;
             
-            if (gameState.collected < gameState.totalResources && !gameState.gameEnded) {
-                updateStatus('Code execution complete. Resources remain!', 'failed');
-                addToHistory('Execution complete. Not all resources collected.', 'error');
-                gameState.gameEnded = true;
+            if (!gameState.gameEnded) {
+                if (gameState.collected < gameState.totalResources) {
+                    updateStatus('Code execution complete. Resources remain!', 'failed');
+                    addToHistory('Execution complete. Not all resources collected.', 'error');
+                    gameState.gameEnded = true;
+                }
             }
         }
 
-        // Execute single command
-        function executeCommand(command) {
-            return new Promise((resolve) => {
-                let result = { success: false, message: '' };
+        // Execute bye command (move until blocked)
+        async function executeByeCommand(direction) {
+            let dx = 0, dy = 0;
+            switch (direction) {
+                case 'up': dy = -1; break;
+                case 'down': dy = 1; break;
+                case 'left': dx = -1; break;
+                case 'right': dx = 1; break;
+            }
+            
+            let moveCount = 0;
+            
+            while (true) {
+                const newX = gameState.player.x + dx;
+                const newY = gameState.player.y + dy;
                 
-                switch (command) {
-                    case 'up':
-                        result = movePlayer(0, -1);
-                        break;
-                    case 'down':
-                        result = movePlayer(0, 1);
-                        break;
-                    case 'left':
-                        result = movePlayer(-1, 0);
-                        break;
-                    case 'right':
-                        result = movePlayer(1, 0);
-                        break;
-                    case 'collect':
-                        result = collectResource();
-                        break;
-                    default:
-                        result = { success: false, message: `Unknown command: "${command}"` };
+                // Check bounds
+                if (newX < 0 || newX >= GRID_SIZE || newY < 0 || newY >= GRID_SIZE) {
+                    break;
                 }
                 
+                // Check walls
+                if (gameState.grid[newY][newX] === 'wall') {
+                    break;
+                }
+                
+                // Check danger zones
+                if (gameState.grid[newY][newX] === 'danger') {
+                    gameState.player.x = newX;
+                    gameState.player.y = newY;
+                    moveCount++;
+                    gameState.steps++;
+                    draw();
+                    return { 
+                        success: false, 
+                        dead: true,
+                        message: `Moved ${direction} ${moveCount} time(s) and entered a DANGER ZONE! 💀` 
+                    };
+                }
+                
+                // Move player
+                gameState.player.x = newX;
+                gameState.player.y = newY;
+                moveCount++;
                 gameState.steps++;
-                updateStats();
+                
                 draw();
-                resolve(result);
-            });
+                await sleep(150);
+            }
+            
+            if (moveCount === 0) {
+                return { success: false, message: `Cannot move ${direction}: Blocked immediately!` };
+            }
+            
+            return { success: true, message: `Moved ${direction} ${moveCount} time(s) until blocked` };
+        }
+
+        // Execute movement command with coefficient
+        async function executeMovementCommand(direction, coefficient) {
+            let dx = 0, dy = 0;
+            switch (direction) {
+                case 'up': dy = -1; break;
+                case 'down': dy = 1; break;
+                case 'left': dx = -1; break;
+                case 'right': dx = 1; break;
+            }
+            
+            for (let i = 0; i < coefficient; i++) {
+                const result = movePlayer(dx, dy);
+                
+                if (result.dead) {
+                    return result;
+                }
+                
+                if (!result.success) {
+                    if (i === 0) {
+                        return result;
+                    } else {
+                        return { success: true, message: `Moved ${direction} ${i} time(s), then blocked` };
+                    }
+                }
+                
+                draw();
+                await sleep(150);
+            }
+            
+            return { success: true, message: `Moved ${direction} ${coefficient} time(s)` };
         }
 
         // Move player
@@ -578,6 +782,17 @@ collect"></textarea>
             // Check walls
             if (gameState.grid[newY][newX] === 'wall') {
                 return { success: false, message: 'Cannot move: Wall in the way!' };
+            }
+            
+            // Check danger zones
+            if (gameState.grid[newY][newX] === 'danger') {
+                gameState.player.x = newX;
+                gameState.player.y = newY;
+                return { 
+                    success: false, 
+                    dead: true,
+                    message: 'You entered a DANGER ZONE and died! 💀' 
+                };
             }
             
             gameState.player.x = newX;
@@ -614,6 +829,10 @@ collect"></textarea>
             document.getElementById('stepCount').textContent = gameState.steps;
             document.getElementById('playerPos').textContent = 
                 `${gameState.player.x},${gameState.player.y}`;
+            document.getElementById('healthStatus').textContent = 
+                gameState.playerDead ? 'DEAD' : 'OK';
+            document.getElementById('healthStatus').style.color = 
+                gameState.playerDead ? '#ff4444' : '#4ecca3';
         }
 
         function updateStatus(message, type) {
