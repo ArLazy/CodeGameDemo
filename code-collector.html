@@ -396,6 +396,11 @@ left
 collect
 rev repeat 4    # Will do: right, up 2, left 3
 
+Use 'stop n' to wait while blocks move:
+stop 3          # Wait 3 turns (blocks keep moving!)
+
+Note: Failed 'collect'/'drop' become 'stop 1'
+
 Teleport colors: Purple (A), Orange (B)
 Watch out for moving blocks!"></textarea>
             </div>
@@ -422,10 +427,11 @@ Watch out for moving blocks!"></textarea>
                     <li><code>left [n]</code> - Move left n times</li>
                     <li><code>right [n]</code> - Move right n times</li>
                     <li><code>bye [dir] [while coin]</code> - Move until blocked/coin</li>
-                    <li><code>collect</code> - Collect resource (max 3)</li>
-                    <li><code>drop</code> - Deliver to matching drop zone</li>
+                    <li><code>collect</code> - Collect resource (max 3, becomes stop if no coin)</li>
+                    <li><code>drop</code> - Deliver to matching zone (becomes stop if no zone)</li>
                     <li><code>rev [repeat n]</code> - Reverse last command(s)</li>
                     <li><code>repeat n</code> - Repeat last n commands</li>
+                    <li><code>stop [n]</code> - Wait n turns (blocks move!)</li>
                 </ul>
                 <p style="margin-top: 8px; color: #00ffff;">
                     <strong>rev repeat n:</strong> Takes last n commands, reverses direction, and executes them!
@@ -1113,6 +1119,22 @@ Watch out for moving blocks!"></textarea>
                             addToHistory(teleportResult.message, 'success');
                         }
                         draw();
+                    } else {
+                        // Replace failed collect with stop 1
+                        addToHistory('  (No resource - treating as stop 1)', 'info');
+                        moveMovingBlocks();
+                        gameState.steps++;
+                        if (checkMovingBlockCollision()) {
+                            draw();
+                            return {
+                                success: false,
+                                dead: true,
+                                message: 'Stopped (no resource) - Moving block crushed you! 💀'
+                            };
+                        }
+                        draw();
+                        await sleep(200);
+                        result = { success: true, message: 'No resource to collect - waited 1 turn' };
                     }
                     break;
                     
@@ -1129,7 +1151,43 @@ Watch out for moving blocks!"></textarea>
                             return { success: false, dead: true, message: 'Killed by moving block!' };
                         }
                         draw();
+                    } else {
+                        // Replace failed drop with stop 1
+                        addToHistory('  (No matching drop zone - treating as stop 1)', 'info');
+                        moveMovingBlocks();
+                        gameState.steps++;
+                        if (checkMovingBlockCollision()) {
+                            draw();
+                            return {
+                                success: false,
+                                dead: true,
+                                message: 'Stopped (no drop zone) - Moving block crushed you! 💀'
+                            };
+                        }
+                        draw();
+                        await sleep(200);
+                        result = { success: true, message: 'Not on delivery zone - waited 1 turn' };
                     }
+                    break;
+                    
+                case 'stop':
+                    for (let i = 0; i < cmd.turns; i++) {
+                        moveMovingBlocks();
+                        gameState.steps++;
+                        
+                        if (checkMovingBlockCollision()) {
+                            draw();
+                            return {
+                                success: false,
+                                dead: true,
+                                message: `Stopped for ${i + 1} turn(s) - Moving block crushed you! 💀`
+                            };
+                        }
+                        
+                        draw();
+                        await sleep(200);
+                    }
+                    result = { success: true, message: `Stopped for ${cmd.turns} turn(s) - Moving blocks continued!` };
                     break;
                     
                 default:
@@ -1183,6 +1241,12 @@ Watch out for moving blocks!"></textarea>
                     return { valid: false, error: `Invalid repeat count: "${parts[1]}"` };
                 }
                 return { valid: true, command: 'repeat', count: count, originalLine: line };
+            } else if (command === 'stop') {
+                const turns = parts[1] ? parseInt(parts[1]) : 1;
+                if (isNaN(turns) || turns < 1) {
+                    return { valid: false, error: `Invalid stop count: "${parts[1]}"` };
+                }
+                return { valid: true, command: 'stop', turns: turns, originalLine: line };
             } else {
                 return { valid: false, error: `Unknown command: "${command}"` };
             }
@@ -1261,7 +1325,7 @@ Watch out for moving blocks!"></textarea>
                         if (result.success) {
                             addToHistory(result.message, 'success');
                             // Add to history if it's a reversible command
-                            if (reversedCmd.command !== 'collect' && reversedCmd.command !== 'drop') {
+                            if (reversedCmd.command !== 'collect' && reversedCmd.command !== 'drop' && reversedCmd.command !== 'stop') {
                                 commandHistory.push(reversedCmd);
                             }
                         } else {
@@ -1311,7 +1375,7 @@ Watch out for moving blocks!"></textarea>
                         
                         if (result.success) {
                             addToHistory(result.message, 'success');
-                            if (cmd.command !== 'collect' && cmd.command !== 'drop') {
+                            if (cmd.command !== 'collect' && cmd.command !== 'drop' && cmd.command !== 'stop') {
                                 commandHistory.push(cmd);
                             }
                         } else {
@@ -1349,7 +1413,7 @@ Watch out for moving blocks!"></textarea>
                 if (result.success) {
                     addToHistory(result.message, 'success');
                     // Add to command history (but not for collect/drop)
-                    if (parsed.command !== 'collect' && parsed.command !== 'drop') {
+                    if (parsed.command !== 'collect' && parsed.command !== 'drop' && parsed.command !== 'stop') {
                         commandHistory.push(parsed);
                     }
                 } else {
