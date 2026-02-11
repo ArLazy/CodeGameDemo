@@ -78,11 +78,49 @@
             font-weight: bold;
         }
 
+        .inventory {
+            margin-top: 10px;
+            padding: 10px;
+            background: #0a0a14;
+            border-radius: 6px;
+        }
+
+        .inventory h4 {
+            color: #4ecca3;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .inventory-items {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            min-height: 30px;
+        }
+
+        .inventory-item {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+        }
+
+        .item-yellow { background: #ffd700; }
+        .item-green { background: #4ecca3; }
+        .item-blue { background: #3498db; }
+
+        .inventory-empty {
+            color: #555;
+            font-size: 12px;
+            font-style: italic;
+        }
+
         .right-panel {
             display: flex;
             flex-direction: column;
             gap: 15px;
-            width: 400px;
+            width: 450px;
         }
 
         .console-section {
@@ -101,7 +139,7 @@
 
         #commandInput {
             width: 100%;
-            height: 200px;
+            height: 220px;
             background: #0a0a14;
             color: #4ecca3;
             border: none;
@@ -181,8 +219,8 @@
             padding: 15px;
             border-radius: 8px;
             border: 2px solid #0f3460;
-            font-size: 13px;
-            line-height: 1.6;
+            font-size: 12px;
+            line-height: 1.5;
         }
 
         .instructions h3 {
@@ -204,6 +242,34 @@
 
         .instructions li {
             margin-bottom: 5px;
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            border: 1px solid #fff;
+        }
+
+        .legend-circle {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 1px solid #fff;
         }
 
         .status-message {
@@ -284,7 +350,7 @@
                 <h3>Game Status</h3>
                 <div class="stats">
                     <div class="stat">
-                        <span>Resources:</span>
+                        <span>Delivered:</span>
                         <span class="stat-value" id="resourceCount">0/0</span>
                     </div>
                     <div class="stat">
@@ -300,6 +366,13 @@
                         <span class="stat-value" id="healthStatus">OK</span>
                     </div>
                 </div>
+                
+                <div class="inventory">
+                    <h4>Inventory (Max 3): <span id="inventoryCount">0/3</span></h4>
+                    <div class="inventory-items" id="inventoryItems">
+                        <span class="inventory-empty">Empty</span>
+                    </div>
+                </div>
             </div>
             
             <div id="statusMessage" class="status-message status-waiting">
@@ -312,14 +385,16 @@
                 <div class="console-header">Command Console</div>
                 <textarea id="commandInput" placeholder="Enter your commands here...
 
-Example with coefficients:
-right 3
-down 2
+Example:
+right 2
 collect
-bye right
+bye right while coin
 collect
+down 3
+drop
 
-The bye command moves until blocked."></textarea>
+Colors: yellow, green, blue
+Deliver to matching colored zones!"></textarea>
             </div>
             
             <div class="button-group">
@@ -339,16 +414,49 @@ The bye command moves until blocked."></textarea>
             <div class="instructions">
                 <h3>Available Commands</h3>
                 <ul>
-                    <li><code>up [n]</code> - Move up (n times, default 1)</li>
-                    <li><code>down [n]</code> - Move down (n times, default 1)</li>
-                    <li><code>left [n]</code> - Move left (n times, default 1)</li>
-                    <li><code>right [n]</code> - Move right (n times, default 1)</li>
-                    <li><code>bye [direction]</code> - Move in direction until blocked</li>
-                    <li><code>collect</code> - Collect resource at current position</li>
+                    <li><code>up [n]</code> - Move up n times (default 1)</li>
+                    <li><code>down [n]</code> - Move down n times (default 1)</li>
+                    <li><code>left [n]</code> - Move left n times (default 1)</li>
+                    <li><code>right [n]</code> - Move right n times (default 1)</li>
+                    <li><code>bye [direction] [while coin]</code> - Move until blocked or coin found</li>
+                    <li><code>collect</code> - Collect resource (max 3 in inventory)</li>
+                    <li><code>drop</code> - Deliver resources to matching drop zone</li>
                 </ul>
-                <p style="margin-top: 10px;">
-                    <strong>Goal:</strong> Collect all resources (yellow). Avoid walls (gray) and <span style="color: #ff4444; font-weight: bold;">DANGER ZONES (red)</span> - touching them kills you! Your code runs in one iteration.
-                </p>
+                
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-circle" style="background: #ffd700;"></div>
+                        <span>Yellow Resource</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-circle" style="background: #4ecca3;"></div>
+                        <span>Green Resource</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-circle" style="background: #3498db;"></div>
+                        <span>Blue Resource</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #b8860b;"></div>
+                        <span>Yellow Drop</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #2e8b57;"></div>
+                        <span>Green Drop</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #1e6091;"></div>
+                        <span>Blue Drop</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #8b0000;"></div>
+                        <span>DANGER</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #555;"></div>
+                        <span>Wall</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -358,6 +466,13 @@ The bye command moves until blocked."></textarea>
         const ctx = canvas.getContext('2d');
         const GRID_SIZE = 10;
         const CELL_SIZE = 40;
+        const MAX_INVENTORY = 3;
+        
+        const COLORS = {
+            yellow: { resource: '#ffd700', drop: '#b8860b', light: '#ffeb99' },
+            green: { resource: '#4ecca3', drop: '#2e8b57', light: '#99ffcc' },
+            blue: { resource: '#3498db', drop: '#1e6091', light: '#99ccff' }
+        };
         
         const initialState = {
             grid: [],
@@ -365,7 +480,9 @@ The bye command moves until blocked."></textarea>
             resources: [],
             walls: [],
             dangerZones: [],
-            collected: 0,
+            dropZones: [],
+            inventory: [],
+            delivered: 0,
             totalResources: 0,
             steps: 0,
             isRunning: false,
@@ -373,7 +490,9 @@ The bye command moves until blocked."></textarea>
             playerDead: false,
             originalPlayer: { x: 0, y: 0 },
             originalResources: [],
-            originalGrid: []
+            originalGrid: [],
+            originalInventory: [],
+            originalDelivered: 0
         };
 
         let gameState = JSON.parse(JSON.stringify(initialState));
@@ -399,15 +518,17 @@ The bye command moves until blocked."></textarea>
             gameState.resources = [];
             gameState.walls = [];
             gameState.dangerZones = [];
-            gameState.collected = 0;
+            gameState.dropZones = [];
+            gameState.inventory = [];
+            gameState.delivered = 0;
             gameState.totalResources = 0;
             gameState.steps = 0;
             gameState.isRunning = false;
             gameState.gameEnded = false;
             gameState.playerDead = false;
             
-            // Generate walls (15-25 walls)
-            const wallCount = Math.floor(Math.random() * 11) + 15;
+            // Generate walls (12-20 walls)
+            const wallCount = Math.floor(Math.random() * 9) + 12;
             for (let i = 0; i < wallCount; i++) {
                 let x, y;
                 do {
@@ -419,8 +540,8 @@ The bye command moves until blocked."></textarea>
                 gameState.walls.push({ x, y });
             }
             
-            // Generate danger zones (5-8 red cells)
-            const dangerCount = Math.floor(Math.random() * 4) + 5;
+            // Generate danger zones (4-6 red cells)
+            const dangerCount = Math.floor(Math.random() * 3) + 4;
             for (let i = 0; i < dangerCount; i++) {
                 let x, y;
                 do {
@@ -432,20 +553,34 @@ The bye command moves until blocked."></textarea>
                 gameState.dangerZones.push({ x, y });
             }
             
-            // Generate resources (5-10 resources)
-            const resourceCount = Math.floor(Math.random() * 6) + 5;
-            for (let i = 0; i < resourceCount; i++) {
-                let x, y;
-                do {
-                    x = Math.floor(Math.random() * GRID_SIZE);
-                    y = Math.floor(Math.random() * GRID_SIZE);
-                } while ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty');
+            // Generate resources and drop zones for each color
+            const colors = ['yellow', 'green', 'blue'];
+            colors.forEach(color => {
+                // Generate 2-4 resources of this color
+                const resourceCount = Math.floor(Math.random() * 3) + 2;
+                for (let i = 0; i < resourceCount; i++) {
+                    let x, y;
+                    do {
+                        x = Math.floor(Math.random() * GRID_SIZE);
+                        y = Math.floor(Math.random() * GRID_SIZE);
+                    } while ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty');
+                    
+                    gameState.grid[y][x] = `resource_${color}`;
+                    gameState.resources.push({ x, y, color, collected: false, delivered: false });
+                }
                 
-                gameState.grid[y][x] = 'resource';
-                gameState.resources.push({ x, y, collected: false });
-            }
-            
-            gameState.totalResources = resourceCount;
+                // Generate 1 drop zone for this color
+                let dx, dy;
+                do {
+                    dx = Math.floor(Math.random() * GRID_SIZE);
+                    dy = Math.floor(Math.random() * GRID_SIZE);
+                } while ((dx === 0 && dy === 0) || gameState.grid[dy][dx] !== 'empty');
+                
+                gameState.grid[dy][dx] = `drop_${color}`;
+                gameState.dropZones.push({ x: dx, y: dy, color });
+                
+                gameState.totalResources += resourceCount;
+            });
             
             // Store original state for restart
             saveOriginalState();
@@ -453,6 +588,7 @@ The bye command moves until blocked."></textarea>
             // Clear history and update status
             clearHistory();
             addToHistory('New task generated!', 'info');
+            addToHistory(`Collect ${gameState.totalResources} resources and deliver to matching zones!`, 'info');
             updateStatus('Task ready - Write your code!', 'waiting');
             updateStats();
             draw();
@@ -463,6 +599,8 @@ The bye command moves until blocked."></textarea>
             gameState.originalPlayer = { ...gameState.player };
             gameState.originalResources = gameState.resources.map(r => ({ ...r }));
             gameState.originalGrid = gameState.grid.map(row => [...row]);
+            gameState.originalInventory = [];
+            gameState.originalDelivered = 0;
         }
 
         // Restart game with same layout
@@ -476,7 +614,8 @@ The bye command moves until blocked."></textarea>
             gameState.player = { ...gameState.originalPlayer };
             gameState.resources = gameState.originalResources.map(r => ({ ...r }));
             gameState.grid = gameState.originalGrid.map(row => [...row]);
-            gameState.collected = 0;
+            gameState.inventory = [];
+            gameState.delivered = 0;
             gameState.steps = 0;
             gameState.isRunning = false;
             gameState.gameEnded = false;
@@ -506,6 +645,28 @@ The bye command moves until blocked."></textarea>
                 ctx.lineTo(GRID_SIZE * CELL_SIZE, i * CELL_SIZE);
                 ctx.stroke();
             }
+            
+            // Draw drop zones (lighter colored cells)
+            gameState.dropZones.forEach(drop => {
+                ctx.fillStyle = COLORS[drop.color].drop;
+                ctx.fillRect(
+                    drop.x * CELL_SIZE + 1,
+                    drop.y * CELL_SIZE + 1,
+                    CELL_SIZE - 2,
+                    CELL_SIZE - 2
+                );
+                
+                // Draw letter indicating drop zone
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.font = 'bold 16px Courier New';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(
+                    drop.color[0].toUpperCase(),
+                    drop.x * CELL_SIZE + CELL_SIZE / 2,
+                    drop.y * CELL_SIZE + CELL_SIZE / 2
+                );
+            });
             
             // Draw danger zones (red cells)
             gameState.dangerZones.forEach(danger => {
@@ -544,7 +705,7 @@ The bye command moves until blocked."></textarea>
             // Draw resources
             gameState.resources.forEach(resource => {
                 if (!resource.collected) {
-                    ctx.fillStyle = '#ffd700';
+                    ctx.fillStyle = COLORS[resource.color].resource;
                     ctx.beginPath();
                     ctx.arc(
                         resource.x * CELL_SIZE + CELL_SIZE / 2,
@@ -556,7 +717,7 @@ The bye command moves until blocked."></textarea>
                     ctx.fill();
                     
                     // Glow effect
-                    ctx.shadowColor = '#ffd700';
+                    ctx.shadowColor = COLORS[resource.color].resource;
                     ctx.shadowBlur = 10;
                     ctx.fill();
                     ctx.shadowBlur = 0;
@@ -565,7 +726,7 @@ The bye command moves until blocked."></textarea>
             
             // Draw player
             if (!gameState.playerDead) {
-                ctx.fillStyle = '#4ecca3';
+                ctx.fillStyle = '#fff';
                 ctx.fillRect(
                     gameState.player.x * CELL_SIZE + 5,
                     gameState.player.y * CELL_SIZE + 5,
@@ -583,6 +744,20 @@ The bye command moves until blocked."></textarea>
                     CELL_SIZE - 10
                 );
                 ctx.shadowBlur = 0;
+                
+                // Draw inventory indicator on player
+                if (gameState.inventory.length > 0) {
+                    ctx.fillStyle = COLORS[gameState.inventory[0]].resource;
+                    ctx.beginPath();
+                    ctx.arc(
+                        gameState.player.x * CELL_SIZE + CELL_SIZE / 2,
+                        gameState.player.y * CELL_SIZE + CELL_SIZE / 2,
+                        6,
+                        0,
+                        Math.PI * 2
+                    );
+                    ctx.fill();
+                }
             }
         }
 
@@ -620,12 +795,16 @@ The bye command moves until blocked."></textarea>
                 let result;
                 
                 if (command === 'bye') {
-                    // bye command - move until blocked
+                    // bye command - parse direction and optional "while coin"
                     const direction = parts[1] ? parts[1].toLowerCase() : null;
                     if (!direction || !['up', 'down', 'left', 'right'].includes(direction)) {
                         result = { success: false, message: 'bye command requires a valid direction (up/down/left/right)' };
                     } else {
-                        result = await executeByeCommand(direction);
+                        // Check for "while coin" modifier
+                        const whileCoin = parts.length >= 4 && 
+                                         parts[2].toLowerCase() === 'while' && 
+                                         parts[3].toLowerCase() === 'coin';
+                        result = await executeByeCommand(direction, whileCoin);
                     }
                 } else if (['up', 'down', 'left', 'right'].includes(command)) {
                     // Movement command with optional coefficient
@@ -637,6 +816,8 @@ The bye command moves until blocked."></textarea>
                     }
                 } else if (command === 'collect') {
                     result = collectResource();
+                } else if (command === 'drop') {
+                    result = dropResource();
                 } else {
                     result = { success: false, message: `Unknown command: "${command}"` };
                 }
@@ -657,9 +838,9 @@ The bye command moves until blocked."></textarea>
                 }
                 
                 // Check win condition
-                if (gameState.collected === gameState.totalResources) {
-                    updateStatus(`SUCCESS! All resources collected in ${gameState.steps} steps!`, 'success');
-                    addToHistory('🎉 All resources collected!', 'success');
+                if (gameState.delivered === gameState.totalResources) {
+                    updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
+                    addToHistory('🎉 All resources delivered!', 'success');
                     gameState.gameEnded = true;
                     gameState.isRunning = false;
                     return;
@@ -672,16 +853,16 @@ The bye command moves until blocked."></textarea>
             gameState.isRunning = false;
             
             if (!gameState.gameEnded) {
-                if (gameState.collected < gameState.totalResources) {
-                    updateStatus('Code execution complete. Resources remain!', 'failed');
-                    addToHistory('Execution complete. Not all resources collected.', 'error');
+                if (gameState.delivered < gameState.totalResources) {
+                    updateStatus('Code execution complete. Resources remain undelivered!', 'failed');
+                    addToHistory('Execution complete. Not all resources delivered.', 'error');
                     gameState.gameEnded = true;
                 }
             }
         }
 
-        // Execute bye command (move until blocked)
-        async function executeByeCommand(direction) {
+        // Execute bye command (move until blocked or coin found)
+        async function executeByeCommand(direction, whileCoin) {
             let dx = 0, dy = 0;
             switch (direction) {
                 case 'up': dy = -1; break;
@@ -728,13 +909,24 @@ The bye command moves until blocked."></textarea>
                 
                 draw();
                 await sleep(150);
+                
+                // Check for coin if whileCoin is enabled
+                if (whileCoin) {
+                    const resource = gameState.resources.find(
+                        r => r.x === gameState.player.x && r.y === gameState.player.y && !r.collected
+                    );
+                    if (resource) {
+                        return { success: true, message: `Moved ${direction} ${moveCount} time(s) and found a ${resource.color} coin!` };
+                    }
+                }
             }
             
             if (moveCount === 0) {
                 return { success: false, message: `Cannot move ${direction}: Blocked immediately!` };
             }
             
-            return { success: true, message: `Moved ${direction} ${moveCount} time(s) until blocked` };
+            const condition = whileCoin ? "until blocked (no coin found)" : "until blocked";
+            return { success: true, message: `Moved ${direction} ${moveCount} time(s) ${condition}` };
         }
 
         // Execute movement command with coefficient
@@ -804,18 +996,64 @@ The bye command moves until blocked."></textarea>
 
         // Collect resource
         function collectResource() {
+            if (gameState.inventory.length >= MAX_INVENTORY) {
+                return { success: false, message: `Inventory full! Max ${MAX_INVENTORY} items. Deliver some first!` };
+            }
+            
             const resource = gameState.resources.find(
                 r => r.x === gameState.player.x && r.y === gameState.player.y && !r.collected
             );
             
             if (resource) {
                 resource.collected = true;
-                gameState.collected++;
-                gameState.grid[resource.y][resource.x] = 'empty';
-                return { success: true, message: `Collected resource at (${resource.x}, ${resource.y})!` };
+                gameState.inventory.push(resource.color);
+                updateStats();
+                return { success: true, message: `Collected ${resource.color} resource! (${gameState.inventory.length}/${MAX_INVENTORY})` };
             }
             
             return { success: false, message: 'No resource to collect at current position!' };
+        }
+
+        // Drop/deliver resource
+        function dropResource() {
+            // Check if player is on a drop zone
+            const dropZone = gameState.dropZones.find(
+                d => d.x === gameState.player.x && d.y === gameState.player.y
+            );
+            
+            if (!dropZone) {
+                return { success: false, message: 'Not on a delivery zone! Find a colored base.' };
+            }
+            
+            // Check if player has resources of matching color
+            const matchingResources = gameState.inventory.filter(color => color === dropZone.color);
+            
+            if (matchingResources.length === 0) {
+                return { success: false, message: `No ${dropZone.color} resources to deliver here!` };
+            }
+            
+            // Deliver all matching resources
+            let deliveredCount = 0;
+            gameState.inventory = gameState.inventory.filter(color => {
+                if (color === dropZone.color) {
+                    deliveredCount++;
+                    gameState.delivered++;
+                    
+                    // Mark the corresponding resource as delivered
+                    const resource = gameState.resources.find(
+                        r => r.color === color && r.collected && !r.delivered
+                    );
+                    if (resource) {
+                        resource.delivered = true;
+                    }
+                    
+                    return false;
+                }
+                return true;
+            });
+            
+            updateStats();
+            return { success: true, message: `Delivered ${deliveredCount} ${dropZone.color} resource(s)!` };
         }
 
         // Utility functions
@@ -825,7 +1063,7 @@ The bye command moves until blocked."></textarea>
 
         function updateStats() {
             document.getElementById('resourceCount').textContent = 
-                `${gameState.collected}/${gameState.totalResources}`;
+                `${gameState.delivered}/${gameState.totalResources}`;
             document.getElementById('stepCount').textContent = gameState.steps;
             document.getElementById('playerPos').textContent = 
                 `${gameState.player.x},${gameState.player.y}`;
@@ -833,6 +1071,19 @@ The bye command moves until blocked."></textarea>
                 gameState.playerDead ? 'DEAD' : 'OK';
             document.getElementById('healthStatus').style.color = 
                 gameState.playerDead ? '#ff4444' : '#4ecca3';
+            
+            // Update inventory display
+            document.getElementById('inventoryCount').textContent = 
+                `${gameState.inventory.length}/${MAX_INVENTORY}`;
+            
+            const inventoryItemsEl = document.getElementById('inventoryItems');
+            if (gameState.inventory.length === 0) {
+                inventoryItemsEl.innerHTML = '<span class="inventory-empty">Empty</span>';
+            } else {
+                inventoryItemsEl.innerHTML = gameState.inventory.map(color => 
+                    `<div class="inventory-item item-${color}"></div>`
+                ).join('');
+            }
         }
 
         function updateStatus(message, type) {
