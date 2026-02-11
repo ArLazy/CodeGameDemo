@@ -633,9 +633,11 @@ Watch out for moving blocks!"></textarea>
                 attempts++;
                 
                 // Random position for top-left corner of 3x3 structure
-                // Ensure it fits within grid and doesn't overlap with start (0,0)
-                const startX = Math.floor(Math.random() * (GRID_SIZE - 3)) + 1;
-                const startY = Math.floor(Math.random() * (GRID_SIZE - 3)) + 1;
+                // Add padding of 2 cells from all borders to ensure:
+                // 1. Structure doesn't touch edges
+                // 2. Cell in front of door is within bounds and can be empty
+                const startX = Math.floor(Math.random() * (GRID_SIZE - 5)) + 2;
+                const startY = Math.floor(Math.random() * (GRID_SIZE - 4)) + 2;
                 
                 // Check if area is clear (avoid 0,0 and existing grid elements)
                 let areaClear = true;
@@ -650,6 +652,13 @@ Watch out for moving blocks!"></textarea>
                 }
                 
                 if (!areaClear) continue;
+                
+                // Check that cell in front of door is empty (door is on right side at startX + 2, startY + 1)
+                const frontCellX = startX + 3;
+                const frontCellY = startY + 1;
+                if (frontCellX >= GRID_SIZE || gameState.grid[frontCellY][frontCellX] !== 'empty') {
+                    continue;
+                }
                 
                 // Place walls (7 walls in a U shape with one side open for door)
                 const walls = [];
@@ -2004,6 +2013,9 @@ Watch out for moving blocks!"></textarea>
                         <canvas id="labyrinthCanvas" class="labyrinth-canvas" width="350" height="350"></canvas>
                         <p class="labyrinth-instructions">Use Arrow Keys or WASD to navigate. Avoid red death zones! Reach the green exit!</p>
                         <p id="labyrinthStatus" class="labyrinth-status"></p>
+                        <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
+                            <button onclick="generateNewLabyrinth()" style="background: #e94560; color: white; padding: 10px 20px; border: none; border-radius: 6px; font-family: 'Courier New', monospace; font-weight: bold; cursor: pointer;">New Maze</button>
+                        </div>
                     </div>
                 `;
                 document.body.appendChild(modal);
@@ -2016,6 +2028,13 @@ Watch out for moving blocks!"></textarea>
             
             drawLabyrinth();
             updateLabyrinthStatus('Navigate to the GREEN exit to unlock the door!');
+        }
+
+        // Generate a new labyrinth maze
+        function generateNewLabyrinth() {
+            generateLabyrinth();
+            drawLabyrinth();
+            updateLabyrinthStatus('New maze generated! Navigate to the GREEN exit!');
         }
 
         // Handle labyrinth keyboard input
