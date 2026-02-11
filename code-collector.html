@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Collector - Screeps-like Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #4ecca3;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(78, 204, 163, 0.5);
+        }
+
+        .game-container {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        #gameCanvas {
+            border: 3px solid #4ecca3;
+            border-radius: 8px;
+            background: #0f0f1a;
+            box-shadow: 0 0 20px rgba(78, 204, 163, 0.3);
+        }
+
+        .info-panel {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #0f3460;
+        }
+
+        .info-panel h3 {
+            color: #e94560;
+            margin-bottom: 10px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .stat-value {
+            color: #4ecca3;
+            font-weight: bold;
+        }
+
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 400px;
+        }
+
+        .console-section {
+            background: #16213e;
+            border-radius: 8px;
+            border: 2px solid #0f3460;
+            overflow: hidden;
+        }
+
+        .console-header {
+            background: #0f3460;
+            padding: 10px 15px;
+            font-weight: bold;
+            color: #4ecca3;
+        }
+
+        #commandInput {
+            width: 100%;
+            height: 200px;
+            background: #0a0a14;
+            color: #4ecca3;
+            border: none;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: none;
+            outline: none;
+        }
+
+        #commandInput::placeholder {
+            color: #555;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-generate {
+            background: #e94560;
+            color: white;
+        }
+
+        .btn-generate:hover {
+            background: #ff6b6b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
+        }
+
+        .btn-run {
+            background: #4ecca3;
+            color: #1a1a2e;
+        }
+
+        .btn-run:hover {
+            background: #6effc0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(78, 204, 163, 0.4);
+        }
+
+        .btn-clear {
+            background: #533483;
+            color: white;
+        }
+
+        .btn-clear:hover {
+            background: #7b5ab7;
+            transform: translateY(-2px);
+        }
+
+        .instructions {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #0f3460;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .instructions h3 {
+            color: #e94560;
+            margin-bottom: 10px;
+        }
+
+        .instructions code {
+            background: #0a0a14;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #4ecca3;
+        }
+
+        .instructions ul {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+
+        .instructions li {
+            margin-bottom: 5px;
+        }
+
+        .status-message {
+            text-align: center;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: bold;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .status-waiting {
+            background: #533483;
+            color: #fff;
+        }
+
+        .status-running {
+            background: #f39c12;
+            color: #fff;
+        }
+
+        .status-success {
+            background: #4ecca3;
+            color: #1a1a2e;
+        }
+
+        .status-failed {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .command-history {
+            background: #0a0a14;
+            padding: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+
+        .command-line {
+            padding: 3px 0;
+            border-bottom: 1px solid #1a1a2e;
+        }
+
+        .command-success {
+            color: #4ecca3;
+        }
+
+        .command-error {
+            color: #e94560;
+        }
+
+        .command-info {
+            color: #f39c12;
+        }
+    </style>
+</head>
+<body>
+    <h1>CODE COLLECTOR</h1>
+    
+    <div class="game-container">
+        <div class="left-panel">
+            <canvas id="gameCanvas" width="400" height="400"></canvas>
+            
+            <div class="info-panel">
+                <h3>Game Status</h3>
+                <div class="stats">
+                    <div class="stat">
+                        <span>Resources:</span>
+                        <span class="stat-value" id="resourceCount">0/0</span>
+                    </div>
+                    <div class="stat">
+                        <span>Steps:</span>
+                        <span class="stat-value" id="stepCount">0</span>
+                    </div>
+                    <div class="stat">
+                        <span>Pos:</span>
+                        <span class="stat-value" id="playerPos">0,0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="statusMessage" class="status-message status-waiting">
+                Press "Generate Task" to start
+            </div>
+        </div>
+        
+        <div class="right-panel">
+            <div class="console-section">
+                <div class="console-header">Command Console</div>
+                <textarea id="commandInput" placeholder="Enter your commands here...
+
+Example:
+right
+down
+collect
+right
+collect
+up
+collect"></textarea>
+            </div>
+            
+            <div class="button-group">
+                <button class="btn-generate" onclick="generateTask()">Generate Task</button>
+                <button class="btn-run" onclick="runCommands()">Run Code</button>
+                <button class="btn-clear" onclick="clearConsole()">Clear</button>
+            </div>
+            
+            <div class="console-section">
+                <div class="console-header">Execution Log</div>
+                <div id="commandHistory" class="command-history">
+                    <div class="command-line command-info">Ready to start...</div>
+                </div>
+            </div>
+            
+            <div class="instructions">
+                <h3>Available Commands</h3>
+                <ul>
+                    <li><code>up</code> - Move up</li>
+                    <li><code>down</code> - Move down</li>
+                    <li><code>left</code> - Move left</li>
+                    <li><code>right</code> - Move right</li>
+                    <li><code>collect</code> - Collect resource at current position</li>
+                </ul>
+                <p style="margin-top: 10px;">
+                    <strong>Goal:</strong> Collect all resources (yellow) by writing a sequence of commands. Avoid walls (gray). Your code runs in one iteration - plan carefully!
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const GRID_SIZE = 10;
+        const CELL_SIZE = 40;
+        
+        let gameState = {
+            grid: [],
+            player: { x: 0, y: 0 },
+            resources: [],
+            walls: [],
+            collected: 0,
+            totalResources: 0,
+            steps: 0,
+            isRunning: false,
+            gameEnded: false
+        };
+
+        // Initialize empty grid
+        function initGrid() {
+            gameState.grid = [];
+            for (let y = 0; y < GRID_SIZE; y++) {
+                gameState.grid[y] = [];
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    gameState.grid[y][x] = 'empty';
+                }
+            }
+        }
+
+        // Generate random task
+        function generateTask() {
+            initGrid();
+            
+            // Reset game state
+            gameState.player = { x: 0, y: 0 };
+            gameState.resources = [];
+            gameState.walls = [];
+            gameState.collected = 0;
+            gameState.totalResources = 0;
+            gameState.steps = 0;
+            gameState.isRunning = false;
+            gameState.gameEnded = false;
+            
+            // Generate walls (15-25 walls)
+            const wallCount = Math.floor(Math.random() * 11) + 15;
+            for (let i = 0; i < wallCount; i++) {
+                let x, y;
+                do {
+                    x = Math.floor(Math.random() * GRID_SIZE);
+                    y = Math.floor(Math.random() * GRID_SIZE);
+                } while ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty');
+                
+                gameState.grid[y][x] = 'wall';
+                gameState.walls.push({ x, y });
+            }
+            
+            // Generate resources (5-10 resources)
+            const resourceCount = Math.floor(Math.random() * 6) + 5;
+            for (let i = 0; i < resourceCount; i++) {
+                let x, y;
+                do {
+                    x = Math.floor(Math.random() * GRID_SIZE);
+                    y = Math.floor(Math.random() * GRID_SIZE);
+                } while ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty');
+                
+                gameState.grid[y][x] = 'resource';
+                gameState.resources.push({ x, y, collected: false });
+            }
+            
+            gameState.totalResources = resourceCount;
+            
+            // Clear history and update status
+            clearHistory();
+            addToHistory('New task generated!', 'info');
+            updateStatus('Task ready - Write your code!', 'waiting');
+            updateStats();
+            draw();
+        }
+
+        // Draw the game
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid
+            ctx.strokeStyle = '#0f3460';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= GRID_SIZE; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * CELL_SIZE, 0);
+                ctx.lineTo(i * CELL_SIZE, GRID_SIZE * CELL_SIZE);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, i * CELL_SIZE);
+                ctx.lineTo(GRID_SIZE * CELL_SIZE, i * CELL_SIZE);
+                ctx.stroke();
+            }
+            
+            // Draw walls
+            ctx.fillStyle = '#555';
+            gameState.walls.forEach(wall => {
+                ctx.fillRect(
+                    wall.x * CELL_SIZE + 2,
+                    wall.y * CELL_SIZE + 2,
+                    CELL_SIZE - 4,
+                    CELL_SIZE - 4
+                );
+            });
+            
+            // Draw resources
+            gameState.resources.forEach(resource => {
+                if (!resource.collected) {
+                    ctx.fillStyle = '#ffd700';
+                    ctx.beginPath();
+                    ctx.arc(
+                        resource.x * CELL_SIZE + CELL_SIZE / 2,
+                        resource.y * CELL_SIZE + CELL_SIZE / 2,
+                        CELL_SIZE / 3,
+                        0,
+                        Math.PI * 2
+                    );
+                    ctx.fill();
+                    
+                    // Glow effect
+                    ctx.shadowColor = '#ffd700';
+                    ctx.shadowBlur = 10;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            });
+            
+            // Draw player
+            ctx.fillStyle = '#4ecca3';
+            ctx.fillRect(
+                gameState.player.x * CELL_SIZE + 5,
+                gameState.player.y * CELL_SIZE + 5,
+                CELL_SIZE - 10,
+                CELL_SIZE - 10
+            );
+            
+            // Player glow
+            ctx.shadowColor = '#4ecca3';
+            ctx.shadowBlur = 15;
+            ctx.fillRect(
+                gameState.player.x * CELL_SIZE + 5,
+                gameState.player.y * CELL_SIZE + 5,
+                CELL_SIZE - 10,
+                CELL_SIZE - 10
+            );
+            ctx.shadowBlur = 0;
+        }
+
+        // Execute commands
+        async function runCommands() {
+            if (gameState.isRunning || gameState.gameEnded) {
+                if (gameState.gameEnded) {
+                    addToHistory('Game ended. Generate new task to play again.', 'error');
+                }
+                return;
+            }
+            
+            const input = document.getElementById('commandInput').value.trim();
+            if (!input) {
+                addToHistory('Please enter commands first!', 'error');
+                return;
+            }
+            
+            gameState.isRunning = true;
+            updateStatus('Running code...', 'running');
+            clearHistory();
+            addToHistory('Starting execution...', 'info');
+            
+            const commands = input.split('\n').map(cmd => cmd.trim().toLowerCase()).filter(cmd => cmd);
+            
+            for (let i = 0; i < commands.length; i++) {
+                const command = commands[i];
+                addToHistory(`> ${command}`, 'info');
+                
+                const result = await executeCommand(command);
+                
+                if (result.success) {
+                    addToHistory(result.message, 'success');
+                } else {
+                    addToHistory(result.message, 'error');
+                    break;
+                }
+                
+                // Small delay for visualization
+                await sleep(300);
+                
+                // Check win condition
+                if (gameState.collected === gameState.totalResources) {
+                    updateStatus(`SUCCESS! All resources collected in ${gameState.steps} steps!`, 'success');
+                    addToHistory('🎉 All resources collected!', 'success');
+                    gameState.gameEnded = true;
+                    gameState.isRunning = false;
+                    return;
+                }
+            }
+            
+            gameState.isRunning = false;
+            
+            if (gameState.collected < gameState.totalResources && !gameState.gameEnded) {
+                updateStatus('Code execution complete. Resources remain!', 'failed');
+                addToHistory('Execution complete. Not all resources collected.', 'error');
+                gameState.gameEnded = true;
+            }
+        }
+
+        // Execute single command
+        function executeCommand(command) {
+            return new Promise((resolve) => {
+                let result = { success: false, message: '' };
+                
+                switch (command) {
+                    case 'up':
+                        result = movePlayer(0, -1);
+                        break;
+                    case 'down':
+                        result = movePlayer(0, 1);
+                        break;
+                    case 'left':
+                        result = movePlayer(-1, 0);
+                        break;
+                    case 'right':
+                        result = movePlayer(1, 0);
+                        break;
+                    case 'collect':
+                        result = collectResource();
+                        break;
+                    default:
+                        result = { success: false, message: `Unknown command: "${command}"` };
+                }
+                
+                gameState.steps++;
+                updateStats();
+                draw();
+                resolve(result);
+            });
+        }
+
+        // Move player
+        function movePlayer(dx, dy) {
+            const newX = gameState.player.x + dx;
+            const newY = gameState.player.y + dy;
+            
+            // Check bounds
+            if (newX < 0 || newX >= GRID_SIZE || newY < 0 || newY >= GRID_SIZE) {
+                return { success: false, message: 'Cannot move: Out of bounds!' };
+            }
+            
+            // Check walls
+            if (gameState.grid[newY][newX] === 'wall') {
+                return { success: false, message: 'Cannot move: Wall in the way!' };
+            }
+            
+            gameState.player.x = newX;
+            gameState.player.y = newY;
+            
+            const dir = dx === 1 ? 'right' : dx === -1 ? 'left' : dy === 1 ? 'down' : 'up';
+            return { success: true, message: `Moved ${dir} to (${newX}, ${newY})` };
+        }
+
+        // Collect resource
+        function collectResource() {
+            const resource = gameState.resources.find(
+                r => r.x === gameState.player.x && r.y === gameState.player.y && !r.collected
+            );
+            
+            if (resource) {
+                resource.collected = true;
+                gameState.collected++;
+                gameState.grid[resource.y][resource.x] = 'empty';
+                return { success: true, message: `Collected resource at (${resource.x}, ${resource.y})!` };
+            }
+            
+            return { success: false, message: 'No resource to collect at current position!' };
+        }
+
+        // Utility functions
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function updateStats() {
+            document.getElementById('resourceCount').textContent = 
+                `${gameState.collected}/${gameState.totalResources}`;
+            document.getElementById('stepCount').textContent = gameState.steps;
+            document.getElementById('playerPos').textContent = 
+                `${gameState.player.x},${gameState.player.y}`;
+        }
+
+        function updateStatus(message, type) {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = `status-message status-${type}`;
+        }
+
+        function addToHistory(message, type) {
+            const historyEl = document.getElementById('commandHistory');
+            const line = document.createElement('div');
+            line.className = `command-line command-${type}`;
+            line.textContent = message;
+            historyEl.appendChild(line);
+            historyEl.scrollTop = historyEl.scrollHeight;
+        }
+
+        function clearHistory() {
+            document.getElementById('commandHistory').innerHTML = '';
+        }
+
+        function clearConsole() {
+            document.getElementById('commandInput').value = '';
+            clearHistory();
+            addToHistory('Console cleared.', 'info');
+        }
+
+        // Initial draw
+        initGrid();
+        draw();
+    </script>
+</body>
+</html>
