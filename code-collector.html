@@ -337,6 +337,10 @@
             color: #ff4444;
             font-weight: bold;
         }
+
+        .command-rev {
+            color: #00ffff;
+        }
     </style>
 </head>
 <body>
@@ -344,7 +348,7 @@
     
     <div class="game-container">
         <div class="left-panel">
-            <canvas id="gameCanvas" width="400" height="400"></canvas>
+            <canvas id="gameCanvas" width="480" height="480"></canvas>
             
             <div class="info-panel">
                 <h3>Game Status</h3>
@@ -385,16 +389,15 @@
                 <div class="console-header">Command Console</div>
                 <textarea id="commandInput" placeholder="Enter your commands here...
 
-Example:
-right 2
+Example with rev/repeat:
+right 3
+down 2
+left
 collect
-bye right while coin
-collect
-down 3
-drop
+rev repeat 4    # Will do: right, up 2, left 3
 
-Warning: Moving blocks move after each command!
-Teleporters instantly warp you to their pair!"></textarea>
+Teleport colors: Purple (A), Orange (B)
+Watch out for moving blocks!"></textarea>
             </div>
             
             <div class="button-group">
@@ -414,14 +417,19 @@ Teleporters instantly warp you to their pair!"></textarea>
             <div class="instructions">
                 <h3>Available Commands</h3>
                 <ul>
-                    <li><code>up [n]</code> - Move up n times (default 1)</li>
-                    <li><code>down [n]</code> - Move down n times (default 1)</li>
-                    <li><code>left [n]</code> - Move left n times (default 1)</li>
-                    <li><code>right [n]</code> - Move right n times (default 1)</li>
-                    <li><code>bye [direction] [while coin]</code> - Move until blocked or coin found</li>
-                    <li><code>collect</code> - Collect resource (max 3 in inventory)</li>
-                    <li><code>drop</code> - Deliver resources to matching drop zone</li>
+                    <li><code>up [n]</code> - Move up n times</li>
+                    <li><code>down [n]</code> - Move down n times</li>
+                    <li><code>left [n]</code> - Move left n times</li>
+                    <li><code>right [n]</code> - Move right n times</li>
+                    <li><code>bye [dir] [while coin]</code> - Move until blocked/coin</li>
+                    <li><code>collect</code> - Collect resource (max 3)</li>
+                    <li><code>drop</code> - Deliver to matching drop zone</li>
+                    <li><code>rev [repeat n]</code> - Reverse last command(s)</li>
+                    <li><code>repeat n</code> - Repeat last n commands</li>
                 </ul>
+                <p style="margin-top: 8px; color: #00ffff;">
+                    <strong>rev repeat n:</strong> Takes last n commands, reverses direction, and executes them!
+                </p>
                 
                 <div class="legend">
                     <div class="legend-item">
@@ -450,7 +458,11 @@ Teleporters instantly warp you to their pair!"></textarea>
                     </div>
                     <div class="legend-item">
                         <div class="legend-color" style="background: #9932cc;"></div>
-                        <span>Teleporter</span>
+                        <span>Purple TP (A)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ff8c00;"></div>
+                        <span>Orange TP (B)</span>
                     </div>
                     <div class="legend-item">
                         <div class="legend-color" style="background: #ff6600;"></div>
@@ -460,10 +472,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                         <div class="legend-color" style="background: #8b0000;"></div>
                         <span>DANGER</span>
                     </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #555;"></div>
-                        <span>Wall</span>
-                    </div>
                 </div>
             </div>
         </div>
@@ -472,7 +480,7 @@ Teleporters instantly warp you to their pair!"></textarea>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const GRID_SIZE = 10;
+        const GRID_SIZE = 12;
         const CELL_SIZE = 40;
         const MAX_INVENTORY = 3;
         
@@ -480,8 +488,16 @@ Teleporters instantly warp you to their pair!"></textarea>
             yellow: { resource: '#ffd700', drop: '#b8860b', light: '#ffeb99' },
             green: { resource: '#4ecca3', drop: '#2e8b57', light: '#99ffcc' },
             blue: { resource: '#3498db', drop: '#1e6091', light: '#99ccff' },
-            teleporter: '#9932cc',
+            teleporterPurple: '#9932cc',
+            teleporterOrange: '#ff8c00',
             movingBlock: '#ff6600'
+        };
+        
+        const DIRECTION_OPPOSITES = {
+            'up': 'down',
+            'down': 'up',
+            'left': 'right',
+            'right': 'left'
         };
         
         const initialState = {
@@ -509,6 +525,7 @@ Teleporters instantly warp you to their pair!"></textarea>
         };
 
         let gameState = JSON.parse(JSON.stringify(initialState));
+        let commandHistory = []; // Store executed commands for rev/repeat
 
         // Initialize empty grid
         function initGrid() {
@@ -524,6 +541,7 @@ Teleporters instantly warp you to their pair!"></textarea>
         // Generate random task
         function generateTask() {
             initGrid();
+            commandHistory = []; // Reset command history
             
             // Reset game state
             gameState.player = { x: 0, y: 0 };
@@ -542,8 +560,8 @@ Teleporters instantly warp you to their pair!"></textarea>
             gameState.gameEnded = false;
             gameState.playerDead = false;
             
-            // Generate walls (10-18 walls)
-            const wallCount = Math.floor(Math.random() * 9) + 10;
+            // Generate walls (15-22 walls)
+            const wallCount = Math.floor(Math.random() * 8) + 15;
             for (let i = 0; i < wallCount; i++) {
                 let x, y;
                 do {
@@ -555,8 +573,8 @@ Teleporters instantly warp you to their pair!"></textarea>
                 gameState.walls.push({ x, y });
             }
             
-            // Generate danger zones (4-6 red cells)
-            const dangerCount = Math.floor(Math.random() * 3) + 4;
+            // Generate danger zones (5-7 red cells)
+            const dangerCount = Math.floor(Math.random() * 3) + 5;
             for (let i = 0; i < dangerCount; i++) {
                 let x, y;
                 do {
@@ -568,33 +586,51 @@ Teleporters instantly warp you to their pair!"></textarea>
                 gameState.dangerZones.push({ x, y });
             }
             
-            // Generate teleporter pairs (2-3 pairs)
-            const teleporterCount = Math.floor(Math.random() * 2) + 2;
-            for (let i = 0; i < teleporterCount; i++) {
-                let x1, y1, x2, y2;
-                
-                // First teleporter
-                do {
-                    x1 = Math.floor(Math.random() * GRID_SIZE);
-                    y1 = Math.floor(Math.random() * GRID_SIZE);
-                } while ((x1 === 0 && y1 === 0) || gameState.grid[y1][x1] !== 'empty');
-                
-                gameState.grid[y1][x1] = `teleporter_${i}`;
-                
-                // Second teleporter (paired)
-                do {
-                    x2 = Math.floor(Math.random() * GRID_SIZE);
-                    y2 = Math.floor(Math.random() * GRID_SIZE);
-                } while ((x2 === 0 && y2 === 0) || gameState.grid[y2][x2] !== 'empty' || 
-                         (x1 === x2 && y1 === y2));
-                
-                gameState.grid[y2][x2] = `teleporter_${i}`;
-                
-                gameState.teleporters.push({
-                    id: i,
-                    pair: [{ x: x1, y: y1 }, { x: x2, y: y2 }]
-                });
-            }
+            // Generate purple teleporter pair (id: 0)
+            let px1, py1, px2, py2;
+            do {
+                px1 = Math.floor(Math.random() * GRID_SIZE);
+                py1 = Math.floor(Math.random() * GRID_SIZE);
+            } while ((px1 === 0 && py1 === 0) || gameState.grid[py1][px1] !== 'empty');
+            
+            gameState.grid[py1][px1] = 'teleporter_0_purple';
+            
+            do {
+                px2 = Math.floor(Math.random() * GRID_SIZE);
+                py2 = Math.floor(Math.random() * GRID_SIZE);
+            } while ((px2 === 0 && py2 === 0) || gameState.grid[py2][px2] !== 'empty' || 
+                     (px1 === px2 && py1 === py2));
+            
+            gameState.grid[py2][px2] = 'teleporter_0_purple';
+            
+            gameState.teleporters.push({
+                id: 0,
+                color: 'purple',
+                pair: [{ x: px1, y: py1 }, { x: px2, y: py2 }]
+            });
+            
+            // Generate orange teleporter pair (id: 1)
+            let ox1, oy1, ox2, oy2;
+            do {
+                ox1 = Math.floor(Math.random() * GRID_SIZE);
+                oy1 = Math.floor(Math.random() * GRID_SIZE);
+            } while ((ox1 === 0 && oy1 === 0) || gameState.grid[oy1][ox1] !== 'empty');
+            
+            gameState.grid[oy1][ox1] = 'teleporter_1_orange';
+            
+            do {
+                ox2 = Math.floor(Math.random() * GRID_SIZE);
+                oy2 = Math.floor(Math.random() * GRID_SIZE);
+            } while ((ox2 === 0 && oy2 === 0) || gameState.grid[oy2][ox2] !== 'empty' || 
+                     (ox1 === ox2 && oy1 === oy2));
+            
+            gameState.grid[oy2][ox2] = 'teleporter_1_orange';
+            
+            gameState.teleporters.push({
+                id: 1,
+                color: 'orange',
+                pair: [{ x: ox1, y: oy1 }, { x: ox2, y: oy2 }]
+            });
             
             // Generate moving blocks (2-3 moving blocks)
             const movingBlockCount = Math.floor(Math.random() * 2) + 2;
@@ -605,7 +641,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                     y = Math.floor(Math.random() * GRID_SIZE);
                 } while ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty');
                 
-                // Determine movement direction (horizontal or vertical)
                 const isHorizontal = Math.random() > 0.5;
                 const dx = isHorizontal ? (Math.random() > 0.5 ? 1 : -1) : 0;
                 const dy = isHorizontal ? 0 : (Math.random() > 0.5 ? 1 : -1);
@@ -623,7 +658,6 @@ Teleporters instantly warp you to their pair!"></textarea>
             // Generate resources and drop zones for each color
             const colors = ['yellow', 'green', 'blue'];
             colors.forEach(color => {
-                // Generate 2-4 resources of this color
                 const resourceCount = Math.floor(Math.random() * 3) + 2;
                 for (let i = 0; i < resourceCount; i++) {
                     let x, y;
@@ -636,7 +670,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                     gameState.resources.push({ x, y, color, collected: false, delivered: false });
                 }
                 
-                // Generate 1 drop zone for this color
                 let dx, dy;
                 do {
                     dx = Math.floor(Math.random() * GRID_SIZE);
@@ -649,13 +682,11 @@ Teleporters instantly warp you to their pair!"></textarea>
                 gameState.totalResources += resourceCount;
             });
             
-            // Store original state for restart
             saveOriginalState();
             
-            // Clear history and update status
             clearHistory();
             addToHistory('New task generated!', 'info');
-            addToHistory(`Collect ${gameState.totalResources} resources and deliver! Watch out for moving blocks!`, 'info');
+            addToHistory(`Collect ${gameState.totalResources} resources and deliver!`, 'info');
             updateStatus('Task ready - Write your code!', 'waiting');
             updateStats();
             draw();
@@ -678,7 +709,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                 return;
             }
             
-            // Restore original state
             gameState.player = { ...gameState.originalPlayer };
             gameState.resources = gameState.originalResources.map(r => ({ ...r }));
             gameState.grid = gameState.originalGrid.map(row => [...row]);
@@ -689,6 +719,7 @@ Teleporters instantly warp you to their pair!"></textarea>
             gameState.isRunning = false;
             gameState.gameEnded = false;
             gameState.playerDead = false;
+            commandHistory = []; // Clear command history on restart
             
             clearHistory();
             addToHistory('Game restarted with same layout!', 'info');
@@ -759,9 +790,12 @@ Teleporters instantly warp you to their pair!"></textarea>
             });
             
             // Draw teleporters
-            gameState.teleporters.forEach((teleporter, idx) => {
-                teleporter.pair.forEach((pos, pairIdx) => {
-                    ctx.fillStyle = COLORS.teleporter;
+            gameState.teleporters.forEach((teleporter) => {
+                const color = teleporter.color === 'purple' ? COLORS.teleporterPurple : COLORS.teleporterOrange;
+                const label = teleporter.color === 'purple' ? 'A' : 'B';
+                
+                teleporter.pair.forEach((pos) => {
+                    ctx.fillStyle = color;
                     ctx.fillRect(
                         pos.x * CELL_SIZE + 2,
                         pos.y * CELL_SIZE + 2,
@@ -769,7 +803,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                         CELL_SIZE - 4
                     );
                     
-                    // Draw teleporter symbol
                     ctx.strokeStyle = '#fff';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
@@ -782,13 +815,12 @@ Teleporters instantly warp you to their pair!"></textarea>
                     );
                     ctx.stroke();
                     
-                    // Draw pair indicator
                     ctx.fillStyle = '#fff';
                     ctx.font = 'bold 12px Courier New';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText(
-                        String.fromCharCode(65 + idx),
+                        label,
                         pos.x * CELL_SIZE + CELL_SIZE / 2,
                         pos.y * CELL_SIZE + CELL_SIZE / 2
                     );
@@ -837,7 +869,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                     CELL_SIZE - 8
                 );
                 
-                // Draw spikes pattern
                 ctx.strokeStyle = '#000';
                 ctx.lineWidth = 2;
                 for (let i = 0; i < 3; i++) {
@@ -848,7 +879,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                     ctx.stroke();
                 }
                 
-                // Glow effect
                 ctx.shadowColor = COLORS.movingBlock;
                 ctx.shadowBlur = 10;
                 ctx.strokeRect(
@@ -898,7 +928,6 @@ Teleporters instantly warp you to their pair!"></textarea>
         // Move all moving blocks
         function moveMovingBlocks() {
             gameState.movingBlocks.forEach(block => {
-                // Clear old position from grid
                 if (gameState.grid[block.y][block.x] === 'moving_block') {
                     gameState.grid[block.y][block.x] = 'empty';
                 }
@@ -906,7 +935,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                 let newX = block.x + block.dx;
                 let newY = block.y + block.dy;
                 
-                // Check if movement is valid (no walls, bounds, danger)
                 let shouldBounce = false;
                 
                 if (newX < 0 || newX >= GRID_SIZE || newY < 0 || newY >= GRID_SIZE) {
@@ -918,7 +946,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                     shouldBounce = true;
                 }
                 
-                // Check collision with other moving blocks
                 const otherBlock = gameState.movingBlocks.find(b => 
                     b.id !== block.id && b.x === newX && b.y === newY
                 );
@@ -926,7 +953,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                     shouldBounce = true;
                 }
                 
-                // Check collision with resources
                 const resourceAtPos = gameState.resources.find(r => 
                     !r.collected && r.x === newX && r.y === newY
                 );
@@ -935,20 +961,17 @@ Teleporters instantly warp you to their pair!"></textarea>
                 }
                 
                 if (shouldBounce) {
-                    // Reverse direction
                     block.dx = -block.dx;
                     block.dy = -block.dy;
                     newX = block.x + block.dx;
                     newY = block.y + block.dy;
                     
-                    // Check if can move in new direction
                     if (newX < 0 || newX >= GRID_SIZE || newY < 0 || newY >= GRID_SIZE ||
                         gameState.grid[newY][newX] === 'wall' || 
                         gameState.grid[newY][newX] === 'danger' ||
                         gameState.grid[newY][newX].startsWith('teleporter') ||
                         gameState.grid[newY][newX].startsWith('drop_') ||
                         gameState.movingBlocks.some(b => b.id !== block.id && b.x === newX && b.y === newY)) {
-                        // Can't move, stay in place
                         newX = block.x;
                         newY = block.y;
                     }
@@ -957,7 +980,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                 block.x = newX;
                 block.y = newY;
                 
-                // Update grid
                 gameState.grid[block.y][block.x] = 'moving_block';
             });
         }
@@ -974,11 +996,11 @@ Teleporters instantly warp you to their pair!"></textarea>
         function checkTeleporter() {
             const cellType = gameState.grid[gameState.player.y][gameState.player.x];
             if (cellType.startsWith('teleporter_')) {
-                const teleporterId = parseInt(cellType.split('_')[1]);
+                const parts = cellType.split('_');
+                const teleporterId = parseInt(parts[1]);
                 const teleporter = gameState.teleporters.find(t => t.id === teleporterId);
                 
                 if (teleporter) {
-                    // Find the other end of the teleporter pair
                     const destination = teleporter.pair.find(p => 
                         p.x !== gameState.player.x || p.y !== gameState.player.y
                     );
@@ -991,6 +1013,179 @@ Teleporters instantly warp you to their pair!"></textarea>
                 }
             }
             return { teleported: false };
+        }
+
+        // Reverse a command
+        function reverseCommand(cmd) {
+            const reversed = { ...cmd };
+            
+            if (cmd.direction && DIRECTION_OPPOSITES[cmd.direction]) {
+                reversed.direction = DIRECTION_OPPOSITES[cmd.direction];
+            }
+            
+            // Update the command string
+            if (cmd.command === 'movement') {
+                reversed.originalLine = `${reversed.direction}${reversed.coefficient > 1 ? ' ' + reversed.coefficient : ''}`;
+            } else if (cmd.command === 'bye') {
+                reversed.originalLine = `bye ${reversed.direction}${reversed.whileCoin ? ' while coin' : ''}`;
+            }
+            
+            return reversed;
+        }
+
+        // Execute a parsed command
+        async function executeParsedCommand(cmd, isReversed = false) {
+            let result;
+            
+            switch (cmd.command) {
+                case 'movement':
+                    let dx = 0, dy = 0;
+                    switch (cmd.direction) {
+                        case 'up': dy = -1; break;
+                        case 'down': dy = 1; break;
+                        case 'left': dx = -1; break;
+                        case 'right': dx = 1; break;
+                    }
+                    
+                    for (let i = 0; i < cmd.coefficient; i++) {
+                        const moveResult = movePlayer(dx, dy);
+                        
+                        if (moveResult.dead) {
+                            return moveResult;
+                        }
+                        
+                        if (!moveResult.success) {
+                            if (i === 0) {
+                                return moveResult;
+                            } else {
+                                return { success: true, message: `Moved ${cmd.direction} ${i} time(s), then blocked` };
+                            }
+                        }
+                        
+                        moveMovingBlocks();
+                        
+                        if (checkMovingBlockCollision()) {
+                            draw();
+                            return {
+                                success: false,
+                                dead: true,
+                                message: `Moved ${cmd.direction} ${i + 1} time(s) - Moving block crushed you! 💀`
+                            };
+                        }
+                        
+                        const teleportResult = checkTeleporter();
+                        if (teleportResult.teleported) {
+                            addToHistory(teleportResult.message, 'success');
+                            if (checkMovingBlockCollision()) {
+                                return {
+                                    success: false,
+                                    dead: true,
+                                    message: 'Teleported into a moving block! 💀'
+                                };
+                            }
+                        }
+                        
+                        draw();
+                        await sleep(200);
+                    }
+                    
+                    result = { success: true, message: `Moved ${cmd.direction} ${cmd.coefficient} time(s)` };
+                    break;
+                    
+                case 'bye':
+                    result = await executeByeCommand(cmd.direction, cmd.whileCoin);
+                    break;
+                    
+                case 'collect':
+                    result = collectResource();
+                    if (result.success) {
+                        moveMovingBlocks();
+                        if (checkMovingBlockCollision()) {
+                            gameState.playerDead = true;
+                            gameState.gameEnded = true;
+                            draw();
+                            updateStatus('GAME OVER - Crushed by moving block!', 'dead');
+                            addToHistory('💀 You were hit by a moving block!', 'dead');
+                            return { success: false, dead: true, message: 'Killed by moving block!' };
+                        }
+                        const teleportResult = checkTeleporter();
+                        if (teleportResult.teleported) {
+                            addToHistory(teleportResult.message, 'success');
+                        }
+                        draw();
+                    }
+                    break;
+                    
+                case 'drop':
+                    result = dropResource();
+                    if (result.success) {
+                        moveMovingBlocks();
+                        if (checkMovingBlockCollision()) {
+                            gameState.playerDead = true;
+                            gameState.gameEnded = true;
+                            draw();
+                            updateStatus('GAME OVER - Crushed by moving block!', 'dead');
+                            addToHistory('💀 You were hit by a moving block!', 'dead');
+                            return { success: false, dead: true, message: 'Killed by moving block!' };
+                        }
+                        draw();
+                    }
+                    break;
+                    
+                default:
+                    result = { success: false, message: `Unknown command type: ${cmd.command}` };
+            }
+            
+            return result;
+        }
+
+        // Parse a command line
+        function parseCommand(line) {
+            const parts = line.split(/\s+/);
+            const command = parts[0].toLowerCase();
+            
+            if (['up', 'down', 'left', 'right'].includes(command)) {
+                const coefficient = parts[1] ? parseInt(parts[1]) : 1;
+                if (isNaN(coefficient) || coefficient < 1) {
+                    return { valid: false, error: `Invalid coefficient: "${parts[1]}"` };
+                }
+                return {
+                    valid: true,
+                    command: 'movement',
+                    direction: command,
+                    coefficient: coefficient,
+                    originalLine: line
+                };
+            } else if (command === 'bye') {
+                const direction = parts[1] ? parts[1].toLowerCase() : null;
+                if (!direction || !['up', 'down', 'left', 'right'].includes(direction)) {
+                    return { valid: false, error: 'bye command requires a valid direction' };
+                }
+                const whileCoin = parts.length >= 4 && 
+                                 parts[2].toLowerCase() === 'while' && 
+                                 parts[3].toLowerCase() === 'coin';
+                return {
+                    valid: true,
+                    command: 'bye',
+                    direction: direction,
+                    whileCoin: whileCoin,
+                    originalLine: line
+                };
+            } else if (command === 'collect') {
+                return { valid: true, command: 'collect', originalLine: line };
+            } else if (command === 'drop') {
+                return { valid: true, command: 'drop', originalLine: line };
+            } else if (command === 'rev') {
+                return { valid: true, command: 'rev', originalLine: line };
+            } else if (command === 'repeat') {
+                const count = parts[1] ? parseInt(parts[1]) : 1;
+                if (isNaN(count) || count < 1) {
+                    return { valid: false, error: `Invalid repeat count: "${parts[1]}"` };
+                }
+                return { valid: true, command: 'repeat', count: count, originalLine: line };
+            } else {
+                return { valid: false, error: `Unknown command: "${command}"` };
+            }
         }
 
         // Execute commands
@@ -1011,6 +1206,7 @@ Teleporters instantly warp you to their pair!"></textarea>
             }
             
             gameState.isRunning = true;
+            commandHistory = []; // Reset command history at start of execution
             updateStatus('Running code...', 'running');
             clearHistory();
             addToHistory('Starting execution...', 'info');
@@ -1019,72 +1215,143 @@ Teleporters instantly warp you to their pair!"></textarea>
             
             for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
                 const line = lines[lineIndex];
-                const parts = line.split(/\s+/);
-                const command = parts[0].toLowerCase();
+                const parsed = parseCommand(line);
                 
+                if (!parsed.valid) {
+                    addToHistory(`> ${line}`, 'info');
+                    addToHistory(parsed.error, 'error');
+                    break;
+                }
+                
+                // Handle rev command
+                if (parsed.command === 'rev') {
+                    addToHistory(`> ${line}`, 'rev');
+                    
+                    // Check if next line is "repeat n"
+                    let repeatCount = 1;
+                    if (lineIndex + 1 < lines.length) {
+                        const nextLine = lines[lineIndex + 1].trim().toLowerCase();
+                        const nextParts = nextLine.split(/\s+/);
+                        if (nextParts[0] === 'repeat' && nextParts[1]) {
+                            const count = parseInt(nextParts[1]);
+                            if (!isNaN(count) && count >= 1) {
+                                repeatCount = count;
+                                lineIndex++; // Skip the repeat line
+                            }
+                        }
+                    }
+                    
+                    if (commandHistory.length === 0) {
+                        addToHistory('No commands to reverse!', 'error');
+                        continue;
+                    }
+                    
+                    // Get last n commands (or all if fewer)
+                    const commandsToReverse = commandHistory.slice(-repeatCount);
+                    
+                    addToHistory(`Reversing last ${commandsToReverse.length} command(s)...`, 'info');
+                    
+                    // Reverse and execute each command
+                    for (let i = commandsToReverse.length - 1; i >= 0; i--) {
+                        const reversedCmd = reverseCommand(commandsToReverse[i]);
+                        addToHistory(`  [REV] ${reversedCmd.originalLine}`, 'rev');
+                        
+                        const result = await executeParsedCommand(reversedCmd, true);
+                        
+                        if (result.success) {
+                            addToHistory(result.message, 'success');
+                            // Add to history if it's a reversible command
+                            if (reversedCmd.command !== 'collect' && reversedCmd.command !== 'drop') {
+                                commandHistory.push(reversedCmd);
+                            }
+                        } else {
+                            addToHistory(result.message, result.dead ? 'dead' : 'error');
+                            if (result.dead) {
+                                gameState.playerDead = true;
+                                gameState.gameEnded = true;
+                                draw();
+                                updateStatus('GAME OVER - You died!', 'dead');
+                                gameState.isRunning = false;
+                                return;
+                            }
+                            break;
+                        }
+                        
+                        if (gameState.delivered === gameState.totalResources) {
+                            updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
+                            addToHistory('🎉 All resources delivered!', 'success');
+                            gameState.gameEnded = true;
+                            gameState.isRunning = false;
+                            return;
+                        }
+                        
+                        await sleep(250);
+                    }
+                    
+                    continue;
+                }
+                
+                // Handle repeat command
+                if (parsed.command === 'repeat') {
+                    addToHistory(`> ${line}`, 'info');
+                    
+                    if (commandHistory.length === 0) {
+                        addToHistory('No commands to repeat!', 'error');
+                        continue;
+                    }
+                    
+                    const commandsToRepeat = commandHistory.slice(-parsed.count);
+                    
+                    addToHistory(`Repeating last ${commandsToRepeat.length} command(s)...`, 'info');
+                    
+                    for (const cmd of commandsToRepeat) {
+                        addToHistory(`  [REP] ${cmd.originalLine}`, 'info');
+                        
+                        const result = await executeParsedCommand(cmd);
+                        
+                        if (result.success) {
+                            addToHistory(result.message, 'success');
+                            if (cmd.command !== 'collect' && cmd.command !== 'drop') {
+                                commandHistory.push(cmd);
+                            }
+                        } else {
+                            addToHistory(result.message, result.dead ? 'dead' : 'error');
+                            if (result.dead) {
+                                gameState.playerDead = true;
+                                gameState.gameEnded = true;
+                                draw();
+                                updateStatus('GAME OVER - You died!', 'dead');
+                                gameState.isRunning = false;
+                                return;
+                            }
+                            break;
+                        }
+                        
+                        if (gameState.delivered === gameState.totalResources) {
+                            updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
+                            addToHistory('🎉 All resources delivered!', 'success');
+                            gameState.gameEnded = true;
+                            gameState.isRunning = false;
+                            return;
+                        }
+                        
+                        await sleep(250);
+                    }
+                    
+                    continue;
+                }
+                
+                // Regular command execution
                 addToHistory(`> ${line}`, 'info');
                 
-                let result;
-                
-                if (command === 'bye') {
-                    const direction = parts[1] ? parts[1].toLowerCase() : null;
-                    if (!direction || !['up', 'down', 'left', 'right'].includes(direction)) {
-                        result = { success: false, message: 'bye command requires a valid direction' };
-                    } else {
-                        const whileCoin = parts.length >= 4 && 
-                                         parts[2].toLowerCase() === 'while' && 
-                                         parts[3].toLowerCase() === 'coin';
-                        result = await executeByeCommand(direction, whileCoin);
-                    }
-                } else if (['up', 'down', 'left', 'right'].includes(command)) {
-                    const coefficient = parts[1] ? parseInt(parts[1]) : 1;
-                    if (isNaN(coefficient) || coefficient < 1) {
-                        result = { success: false, message: `Invalid coefficient: "${parts[1]}"` };
-                    } else {
-                        result = await executeMovementCommand(command, coefficient);
-                    }
-                } else if (command === 'collect') {
-                    result = collectResource();
-                    // Move blocks after collect command too
-                    if (result.success) {
-                        moveMovingBlocks();
-                        if (checkMovingBlockCollision()) {
-                            gameState.playerDead = true;
-                            gameState.gameEnded = true;
-                            draw();
-                            updateStatus('GAME OVER - Crushed by moving block!', 'dead');
-                            addToHistory('💀 You were hit by a moving block!', 'dead');
-                            gameState.isRunning = false;
-                            return;
-                        }
-                        const teleportResult = checkTeleporter();
-                        if (teleportResult.teleported) {
-                            addToHistory(teleportResult.message, 'success');
-                        }
-                        draw();
-                    }
-                } else if (command === 'drop') {
-                    result = dropResource();
-                    // Move blocks after drop command too
-                    if (result.success) {
-                        moveMovingBlocks();
-                        if (checkMovingBlockCollision()) {
-                            gameState.playerDead = true;
-                            gameState.gameEnded = true;
-                            draw();
-                            updateStatus('GAME OVER - Crushed by moving block!', 'dead');
-                            addToHistory('💀 You were hit by a moving block!', 'dead');
-                            gameState.isRunning = false;
-                            return;
-                        }
-                        draw();
-                    }
-                } else {
-                    result = { success: false, message: `Unknown command: "${command}"` };
-                }
+                const result = await executeParsedCommand(parsed);
                 
                 if (result.success) {
                     addToHistory(result.message, 'success');
+                    // Add to command history (but not for collect/drop)
+                    if (parsed.command !== 'collect' && parsed.command !== 'drop') {
+                        commandHistory.push(parsed);
+                    }
                 } else {
                     addToHistory(result.message, result.dead ? 'dead' : 'error');
                     if (result.dead) {
@@ -1098,7 +1365,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                     break;
                 }
                 
-                // Check win condition
                 if (gameState.delivered === gameState.totalResources) {
                     updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
                     addToHistory('🎉 All resources delivered!', 'success');
@@ -1158,7 +1424,6 @@ Teleporters instantly warp you to their pair!"></textarea>
                     };
                 }
                 
-                // Check for moving block collision
                 if (gameState.grid[newY][newX] === 'moving_block') {
                     gameState.player.x = newX;
                     gameState.player.y = newY;
@@ -1177,10 +1442,8 @@ Teleporters instantly warp you to their pair!"></textarea>
                 moveCount++;
                 gameState.steps++;
                 
-                // Move blocks after each step
                 moveMovingBlocks();
                 
-                // Check collision after blocks move
                 if (checkMovingBlockCollision()) {
                     draw();
                     return {
@@ -1190,12 +1453,10 @@ Teleporters instantly warp you to their pair!"></textarea>
                     };
                 }
                 
-                // Check teleporter
                 const teleportResult = checkTeleporter();
                 if (teleportResult.teleported) {
                     draw();
                     addToHistory(teleportResult.message, 'success');
-                    // After teleport, check for moving block at destination
                     if (checkMovingBlockCollision()) {
                         return {
                             success: false,
@@ -1224,65 +1485,6 @@ Teleporters instantly warp you to their pair!"></textarea>
             
             const condition = whileCoin ? "until blocked (no coin found)" : "until blocked";
             return { success: true, message: `Moved ${direction} ${moveCount} time(s) ${condition}` };
-        }
-
-        // Execute movement command
-        async function executeMovementCommand(direction, coefficient) {
-            let dx = 0, dy = 0;
-            switch (direction) {
-                case 'up': dy = -1; break;
-                case 'down': dy = 1; break;
-                case 'left': dx = -1; break;
-                case 'right': dx = 1; break;
-            }
-            
-            for (let i = 0; i < coefficient; i++) {
-                const result = movePlayer(dx, dy);
-                
-                if (result.dead) {
-                    return result;
-                }
-                
-                if (!result.success) {
-                    if (i === 0) {
-                        return result;
-                    } else {
-                        return { success: true, message: `Moved ${direction} ${i} time(s), then blocked` };
-                    }
-                }
-                
-                // Move blocks after each step
-                moveMovingBlocks();
-                
-                // Check collision after blocks move
-                if (checkMovingBlockCollision()) {
-                    draw();
-                    return {
-                        success: false,
-                        dead: true,
-                        message: `Moved ${direction} ${i + 1} time(s) - Moving block crushed you! 💀`
-                    };
-                }
-                
-                // Check teleporter
-                const teleportResult = checkTeleporter();
-                if (teleportResult.teleported) {
-                    addToHistory(teleportResult.message, 'success');
-                    // After teleport, check for moving block at destination
-                    if (checkMovingBlockCollision()) {
-                        return {
-                            success: false,
-                            dead: true,
-                            message: 'Teleported into a moving block! 💀'
-                        };
-                    }
-                }
-                
-                draw();
-                await sleep(200);
-            }
-            
-            return { success: true, message: `Moved ${direction} ${coefficient} time(s)` };
         }
 
         // Move player
