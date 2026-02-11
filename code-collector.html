@@ -1291,9 +1291,19 @@ Watch out for moving blocks!"></textarea>
                 if (parsed.command === 'rev') {
                     addToHistory(`> ${line}`, 'rev');
                     
-                    // Check if next line is "repeat n"
+                    // Check for "repeat n" on same line or next line
                     let repeatCount = 1;
-                    if (lineIndex + 1 < lines.length) {
+                    const currentParts = line.trim().toLowerCase().split(/\s+/);
+                    
+                    // Check if "repeat n" is on the same line (e.g., "rev repeat 4")
+                    if (currentParts.length >= 3 && currentParts[1] === 'repeat') {
+                        const count = parseInt(currentParts[2]);
+                        if (!isNaN(count) && count >= 1) {
+                            repeatCount = count;
+                        }
+                    }
+                    // Check if next line is "repeat n"
+                    else if (lineIndex + 1 < lines.length) {
                         const nextLine = lines[lineIndex + 1].trim().toLowerCase();
                         const nextParts = nextLine.split(/\s+/);
                         if (nextParts[0] === 'repeat' && nextParts[1]) {
