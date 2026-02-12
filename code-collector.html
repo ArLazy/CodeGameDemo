@@ -461,10 +461,19 @@ Watch out for moving blocks!"></textarea>
             </div>
             
             <div class="button-group">
-                <button class="btn-generate" onclick="generateTask()">Generate Task</button>
-                <button class="btn-restart" onclick="restartGame()">Restart</button>
-                <button class="btn-run" onclick="runCommands()">Run Code</button>
-                <button class="btn-clear" onclick="clearConsole()">Clear</button>
+                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                    <input type="text" id="seedInput" placeholder="Seed (empty for random)" 
+                           style="padding: 10px; border: 2px solid #0f3460; border-radius: 4px; 
+                                  background: #0a0a14; color: #eee; font-family: inherit; font-size: 12px; 
+                                  width: 180px;" maxlength="20">
+                    <span id="currentSeedDisplay" style="color: #4ecca3; font-size: 11px; display: none;"></span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-generate" onclick="generateTask()">Generate Task</button>
+                    <button class="btn-restart" onclick="restartGame()">Restart</button>
+                    <button class="btn-run" onclick="runCommands()">Run Code</button>
+                    <button class="btn-clear" onclick="clearConsole()">Clear</button>
+                </div>
             </div>
             
             <div class="console-section">
@@ -547,6 +556,47 @@ Watch out for moving blocks!"></textarea>
         const ctx = canvas.getContext('2d');
         const GRID_SIZE = 15;
         const CELL_SIZE = 40;
+        
+        // Seeded PRNG (Mulberry32)
+        let seedState = 0;
+        let currentSeed = '';
+        
+        function setSeed(seed) {
+            currentSeed = seed;
+            // Robust string hashing to 32-bit unsigned integer
+            let h = 0x811c9dc5; // FNV-1a offset basis
+            for (let i = 0; i < seed.length; i++) {
+                h ^= seed.charCodeAt(i);
+                h = Math.imul(h, 0x01000193); // FNV-1a prime
+            }
+            // Ensure non-zero state and apply MurmurHash3 finalizer
+            h = h >>> 0;
+            if (h === 0) h = 1;
+            h ^= h >>> 16;
+            h = Math.imul(h, 0x21f0aaad);
+            h ^= h >>> 15;
+            h = Math.imul(h, 0x735a2d97);
+            h ^= h >>> 15;
+            seedState = h >>> 0;
+        }
+        
+        function seededRandom() {
+            // Mulberry32 algorithm
+            let z = (seedState += 0x6D2B79F5) >>> 0;
+            z = (Math.imul(z ^ (z >>> 15), z | 1)) >>> 0;
+            z ^= z + Math.imul(z ^ (z >>> 7), z | 61);
+            return ((z ^ (z >>> 14)) >>> 0) / 4294967296;
+        }
+        
+        function generateRandomSeed() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            const length = Math.floor(Math.random() * 3) + 6; // 6 to 8 characters
+            let seed = '';
+            for (let i = 0; i < length; i++) {
+                seed += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return seed;
+        }
         const MAX_INVENTORY = 3;
         
         const COLORS = {
@@ -626,91 +676,105 @@ Watch out for moving blocks!"></textarea>
             // W W W
             // This uses 7 walls, 1 door, with empty cell inside containing coin
             
-            let placed = false;
-            let attempts = 0;
-            
-            while (!placed && attempts < 100) {
-                attempts++;
-                
-                // Random position for top-left corner of 3x3 structure
-                // Structure must be at least 4 blocks from left and right edges
-                // Structure is 3 blocks wide, door is on the right side
-                // So startX >= 4 (left edge) and startX + 2 <= GRID_SIZE - 5 (right edge)
-                const startX = Math.floor(Math.random() * (GRID_SIZE - 10)) + 4;
-                const startY = Math.floor(Math.random() * (GRID_SIZE - 4)) + 2;
-                
-                // Check if area is clear (avoid 0,0 and existing grid elements)
-                let areaClear = true;
-                for (let y = startY; y < startY + 3; y++) {
-                    for (let x = startX; x < startX + 3; x++) {
-                        if ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty') {
-                            areaClear = false;
-                            break;
+            // Generate a list of all valid positions first
+            const validPositions = [];
+            for (let sy = 2; sy <= GRID_SIZE - 5; sy++) {
+                for (let sx = 4; sx <= GRID_SIZE - 7; sx++) {
+                    // Check if 3x3 area is clear
+                    let areaClear = true;
+                    for (let y = sy; y < sy + 3; y++) {
+                        for (let x = sx; x < sx + 3; x++) {
+                            if ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty') {
+                                areaClear = false;
+                                break;
+                            }
+                        }
+                        if (!areaClear) break;
+                    }
+                    // Check that cell in front of door is empty
+                    if (areaClear) {
+                        const frontCellX = sx + 3;
+                        const frontCellY = sy + 1;
+                        if (frontCellX < GRID_SIZE && gameState.grid[frontCellY][frontCellX] === 'empty') {
+                            validPositions.push({ startX: sx, startY: sy });
                         }
                     }
-                    if (!areaClear) break;
                 }
-                
-                if (!areaClear) continue;
-                
-                // Check that cell in front of door is empty (door is on right side at startX + 2, startY + 1)
-                const frontCellX = startX + 3;
-                const frontCellY = startY + 1;
-                if (frontCellX >= GRID_SIZE || gameState.grid[frontCellY][frontCellX] !== 'empty') {
-                    continue;
-                }
-                
-                // Place walls (7 walls in a U shape with one side open for door)
-                const walls = [];
-                // Top row
-                walls.push({ x: startX, y: startY });
-                walls.push({ x: startX + 1, y: startY });
-                walls.push({ x: startX + 2, y: startY });
-                // Left side
-                walls.push({ x: startX, y: startY + 1 });
-                walls.push({ x: startX, y: startY + 2 });
-                // Bottom row
-                walls.push({ x: startX + 1, y: startY + 2 });
-                walls.push({ x: startX + 2, y: startY + 2 });
-                
-                // Place door on the right side (middle)
-                const doorPos = { x: startX + 2, y: startY + 1 };
-                gameState.grid[doorPos.y][doorPos.x] = 'door';
-                
-                // Inside cell (where coin will be)
-                const insidePos = { x: startX + 1, y: startY + 1 };
-                
-                // Mark all positions
-                walls.forEach(wall => {
-                    gameState.grid[wall.y][wall.x] = 'wall';
-                    gameState.walls.push(wall);
-                });
-                
-                // Store door structure info
-                gameState.doorStructure = {
-                    walls: walls,
-                    door: doorPos,
-                    inside: insidePos,
-                    isOpen: false,
-                    labyrinthTriggered: false
-                };
-                
-                // Add coin inside
-                gameState.grid[insidePos.y][insidePos.x] = 'resource_yellow';
-                gameState.resources.push({ 
-                    x: insidePos.x, 
-                    y: insidePos.y, 
-                    color: 'yellow', 
-                    collected: false, 
-                    delivered: false 
-                });
-                
-                placed = true;
             }
+            
+            // Use seeded random to pick from valid positions
+            // If no valid positions, use a default position (should not happen with empty grid)
+            let startX, startY;
+            if (validPositions.length === 0) {
+                startX = 4;
+                startY = 2;
+            } else {
+                const idx = Math.floor(seededRandom() * validPositions.length);
+                ({ startX, startY } = validPositions[idx]);
+            }
+            
+            // Place walls (7 walls in a U shape with one side open for door)
+            const walls = [];
+            // Top row
+            walls.push({ x: startX, y: startY });
+            walls.push({ x: startX + 1, y: startY });
+            walls.push({ x: startX + 2, y: startY });
+            // Left side
+            walls.push({ x: startX, y: startY + 1 });
+            walls.push({ x: startX, y: startY + 2 });
+            // Bottom row
+            walls.push({ x: startX + 1, y: startY + 2 });
+            walls.push({ x: startX + 2, y: startY + 2 });
+            
+            // Place door on the right side (middle)
+            const doorPos = { x: startX + 2, y: startY + 1 };
+            gameState.grid[doorPos.y][doorPos.x] = 'door';
+            
+            // Inside cell (where coin will be)
+            const insidePos = { x: startX + 1, y: startY + 1 };
+            
+            // Mark all positions
+            walls.forEach(wall => {
+                gameState.grid[wall.y][wall.x] = 'wall';
+                gameState.walls.push(wall);
+            });
+            
+            // Store door structure info
+            gameState.doorStructure = {
+                walls: walls,
+                door: doorPos,
+                inside: insidePos,
+                isOpen: false,
+                labyrinthTriggered: false
+            };
+            
+            // Add coin inside
+            gameState.grid[insidePos.y][insidePos.x] = 'resource_yellow';
+            gameState.resources.push({ 
+                x: insidePos.x, 
+                y: insidePos.y, 
+                color: 'yellow', 
+                collected: false, 
+                delivered: false 
+            });
         }
 
         // Generate random task
         function generateTask() {
+            // Handle seed
+            const seedInput = document.getElementById('seedInput');
+            const seedDisplay = document.getElementById('currentSeedDisplay');
+            let seed = seedInput.value.trim();
+            
+            if (!seed) {
+                seed = generateRandomSeed();
+                seedInput.value = seed;
+            }
+            
+            setSeed(seed);
+            seedDisplay.textContent = `Seed: ${seed}`;
+            seedDisplay.style.display = 'inline';
+            
             initGrid();
             commandHistory = []; // Reset command history
             
@@ -738,89 +802,119 @@ Watch out for moving blocks!"></textarea>
             generateDoorStructure();
             
             // Generate walls (15-22 walls)
-            const wallCount = Math.floor(Math.random() * 8) + 15;
-            for (let i = 0; i < wallCount; i++) {
-                let x, y;
-                do {
-                    x = Math.floor(Math.random() * GRID_SIZE);
-                    y = Math.floor(Math.random() * GRID_SIZE);
-                } while ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty');
+            const wallCount = Math.floor(seededRandom() * 8) + 15;
+            let emptyCells = [];
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if ((x !== 0 || y !== 0) && gameState.grid[y][x] === 'empty') {
+                        emptyCells.push({ x, y });
+                    }
+                }
+            }
+            
+            for (let i = 0; i < wallCount && emptyCells.length > 0; i++) {
+                const idx = Math.floor(seededRandom() * emptyCells.length);
+                const { x, y } = emptyCells.splice(idx, 1)[0];
                 
                 gameState.grid[y][x] = 'wall';
                 gameState.walls.push({ x, y });
             }
             
             // Generate danger zones (5-7 red cells)
-            const dangerCount = Math.floor(Math.random() * 3) + 5;
-            for (let i = 0; i < dangerCount; i++) {
-                let x, y;
-                do {
-                    x = Math.floor(Math.random() * GRID_SIZE);
-                    y = Math.floor(Math.random() * GRID_SIZE);
-                } while ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty');
+            const dangerCount = Math.floor(seededRandom() * 3) + 5;
+            // Rebuild empty cells list
+            emptyCells = [];
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if ((x !== 0 || y !== 0) && gameState.grid[y][x] === 'empty') {
+                        emptyCells.push({ x, y });
+                    }
+                }
+            }
+            
+            for (let i = 0; i < dangerCount && emptyCells.length > 0; i++) {
+                const idx = Math.floor(seededRandom() * emptyCells.length);
+                const { x, y } = emptyCells.splice(idx, 1)[0];
                 
                 gameState.grid[y][x] = 'danger';
                 gameState.dangerZones.push({ x, y });
             }
             
             // Generate purple teleporter pair (id: 0)
+            // Rebuild empty cells list
+            emptyCells = [];
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if ((x !== 0 || y !== 0) && gameState.grid[y][x] === 'empty') {
+                        emptyCells.push({ x, y });
+                    }
+                }
+            }
+            
             let px1, py1, px2, py2;
-            do {
-                px1 = Math.floor(Math.random() * GRID_SIZE);
-                py1 = Math.floor(Math.random() * GRID_SIZE);
-            } while ((px1 === 0 && py1 === 0) || gameState.grid[py1][px1] !== 'empty');
-            
-            gameState.grid[py1][px1] = 'teleporter_0_purple';
-            
-            do {
-                px2 = Math.floor(Math.random() * GRID_SIZE);
-                py2 = Math.floor(Math.random() * GRID_SIZE);
-            } while ((px2 === 0 && py2 === 0) || gameState.grid[py2][px2] !== 'empty' || 
-                     (px1 === px2 && py1 === py2));
-            
-            gameState.grid[py2][px2] = 'teleporter_0_purple';
-            
-            gameState.teleporters.push({
-                id: 0,
-                color: 'purple',
-                pair: [{ x: px1, y: py1 }, { x: px2, y: py2 }]
-            });
+            if (emptyCells.length >= 2) {
+                let idx = Math.floor(seededRandom() * emptyCells.length);
+                ({ x: px1, y: py1 } = emptyCells.splice(idx, 1)[0]);
+                gameState.grid[py1][px1] = 'teleporter_0_purple';
+                
+                idx = Math.floor(seededRandom() * emptyCells.length);
+                ({ x: px2, y: py2 } = emptyCells.splice(idx, 1)[0]);
+                gameState.grid[py2][px2] = 'teleporter_0_purple';
+                
+                gameState.teleporters.push({
+                    id: 0,
+                    color: 'purple',
+                    pair: [{ x: px1, y: py1 }, { x: px2, y: py2 }]
+                });
+            }
             
             // Generate orange teleporter pair (id: 1)
+            // Rebuild empty cells list
+            emptyCells = [];
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if ((x !== 0 || y !== 0) && gameState.grid[y][x] === 'empty') {
+                        emptyCells.push({ x, y });
+                    }
+                }
+            }
+            
             let ox1, oy1, ox2, oy2;
-            do {
-                ox1 = Math.floor(Math.random() * GRID_SIZE);
-                oy1 = Math.floor(Math.random() * GRID_SIZE);
-            } while ((ox1 === 0 && oy1 === 0) || gameState.grid[oy1][ox1] !== 'empty');
-            
-            gameState.grid[oy1][ox1] = 'teleporter_1_orange';
-            
-            do {
-                ox2 = Math.floor(Math.random() * GRID_SIZE);
-                oy2 = Math.floor(Math.random() * GRID_SIZE);
-            } while ((ox2 === 0 && oy2 === 0) || gameState.grid[oy2][ox2] !== 'empty' || 
-                     (ox1 === ox2 && oy1 === oy2));
-            
-            gameState.grid[oy2][ox2] = 'teleporter_1_orange';
-            
-            gameState.teleporters.push({
-                id: 1,
-                color: 'orange',
-                pair: [{ x: ox1, y: oy1 }, { x: ox2, y: oy2 }]
-            });
+            if (emptyCells.length >= 2) {
+                let idx = Math.floor(seededRandom() * emptyCells.length);
+                ({ x: ox1, y: oy1 } = emptyCells.splice(idx, 1)[0]);
+                gameState.grid[oy1][ox1] = 'teleporter_1_orange';
+                
+                idx = Math.floor(seededRandom() * emptyCells.length);
+                ({ x: ox2, y: oy2 } = emptyCells.splice(idx, 1)[0]);
+                gameState.grid[oy2][ox2] = 'teleporter_1_orange';
+                
+                gameState.teleporters.push({
+                    id: 1,
+                    color: 'orange',
+                    pair: [{ x: ox1, y: oy1 }, { x: ox2, y: oy2 }]
+                });
+            }
             
             // Generate moving blocks (2-3 moving blocks)
-            const movingBlockCount = Math.floor(Math.random() * 2) + 2;
-            for (let i = 0; i < movingBlockCount; i++) {
-                let x, y;
-                do {
-                    x = Math.floor(Math.random() * GRID_SIZE);
-                    y = Math.floor(Math.random() * GRID_SIZE);
-                } while ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty');
+            const movingBlockCount = Math.floor(seededRandom() * 2) + 2;
+            // Rebuild empty cells list
+            emptyCells = [];
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if ((x !== 0 || y !== 0) && gameState.grid[y][x] === 'empty') {
+                        emptyCells.push({ x, y });
+                    }
+                }
+            }
+            
+            for (let i = 0; i < movingBlockCount && emptyCells.length > 0; i++) {
+                const idx = Math.floor(seededRandom() * emptyCells.length);
+                const { x, y } = emptyCells.splice(idx, 1)[0];
                 
-                const isHorizontal = Math.random() > 0.5;
-                const dx = isHorizontal ? (Math.random() > 0.5 ? 1 : -1) : 0;
-                const dy = isHorizontal ? 0 : (Math.random() > 0.5 ? 1 : -1);
+                const isHorizontal = seededRandom() > 0.5;
+                const dx = isHorizontal ? (seededRandom() > 0.5 ? 1 : -1) : 0;
+                const dy = isHorizontal ? 0 : (seededRandom() > 0.5 ? 1 : -1);
                 
                 gameState.grid[y][x] = 'moving_block';
                 gameState.movingBlocks.push({
@@ -835,26 +929,43 @@ Watch out for moving blocks!"></textarea>
             // Generate resources and drop zones for each color
             const colors = ['yellow', 'green', 'blue'];
             colors.forEach(color => {
-                const resourceCount = Math.floor(Math.random() * 3) + 2;
-                for (let i = 0; i < resourceCount; i++) {
-                    let x, y;
-                    do {
-                        x = Math.floor(Math.random() * GRID_SIZE);
-                        y = Math.floor(Math.random() * GRID_SIZE);
-                    } while ((x === 0 && y === 0) || gameState.grid[y][x] !== 'empty');
+                const resourceCount = Math.floor(seededRandom() * 3) + 2;
+                
+                // Rebuild empty cells list
+                emptyCells = [];
+                for (let y = 0; y < GRID_SIZE; y++) {
+                    for (let x = 0; x < GRID_SIZE; x++) {
+                        if ((x !== 0 || y !== 0) && gameState.grid[y][x] === 'empty') {
+                            emptyCells.push({ x, y });
+                        }
+                    }
+                }
+                
+                for (let i = 0; i < resourceCount && emptyCells.length > 0; i++) {
+                    const idx = Math.floor(seededRandom() * emptyCells.length);
+                    const { x, y } = emptyCells.splice(idx, 1)[0];
                     
                     gameState.grid[y][x] = `resource_${color}`;
                     gameState.resources.push({ x, y, color, collected: false, delivered: false });
                 }
                 
-                let dx, dy;
-                do {
-                    dx = Math.floor(Math.random() * GRID_SIZE);
-                    dy = Math.floor(Math.random() * GRID_SIZE);
-                } while ((dx === 0 && dy === 0) || gameState.grid[dy][dx] !== 'empty');
+                // Rebuild empty cells list for drop zone
+                emptyCells = [];
+                for (let y = 0; y < GRID_SIZE; y++) {
+                    for (let x = 0; x < GRID_SIZE; x++) {
+                        if ((x !== 0 || y !== 0) && gameState.grid[y][x] === 'empty') {
+                            emptyCells.push({ x, y });
+                        }
+                    }
+                }
                 
-                gameState.grid[dy][dx] = `drop_${color}`;
-                gameState.dropZones.push({ x: dx, y: dy, color });
+                if (emptyCells.length > 0) {
+                    const idx = Math.floor(seededRandom() * emptyCells.length);
+                    const { x: dx, y: dy } = emptyCells.splice(idx, 1)[0];
+                    
+                    gameState.grid[dy][dx] = `drop_${color}`;
+                    gameState.dropZones.push({ x: dx, y: dy, color });
+                }
                 
                 gameState.totalResources += resourceCount;
             });
@@ -1135,6 +1246,33 @@ Watch out for moving blocks!"></textarea>
                     );
                     ctx.fill();
                 }
+            }
+            
+            // Draw seed in bottom-left corner
+            if (currentSeed) {
+                ctx.font = 'bold 12px Courier New';
+                const seedText = `Seed: ${currentSeed}`;
+                const textWidth = ctx.measureText(seedText).width;
+                const padding = 8;
+                const rectX = 5;
+                const rectY = canvas.height - 25;
+                const rectWidth = textWidth + (padding * 2);
+                const rectHeight = 20;
+                
+                // Draw high-contrast background
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+                ctx.fillRect(rectX, rectY, rectWidth, rectHeight);
+                
+                // Draw border for better visibility
+                ctx.strokeStyle = '#4ecca3';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
+                
+                // Draw seed text in high-contrast color
+                ctx.fillStyle = '#4ecca3';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(seedText, rectX + padding, rectY + rectHeight / 2);
             }
         }
 
@@ -1963,12 +2101,18 @@ if (result.success) {
             
             // Generate walls (about 30% of cells)
             const wallCount = Math.floor(LABYRINTH_SIZE * LABYRINTH_SIZE * 0.3);
-            for (let i = 0; i < wallCount; i++) {
-                let x, y;
-                do {
-                    x = Math.floor(Math.random() * LABYRINTH_SIZE);
-                    y = Math.floor(Math.random() * LABYRINTH_SIZE);
-                } while ((x === 0 && y === 0) || labyrinthState.grid[y][x] !== 'empty');
+            let emptyCells = [];
+            for (let y = 0; y < LABYRINTH_SIZE; y++) {
+                for (let x = 0; x < LABYRINTH_SIZE; x++) {
+                    if (x !== 0 || y !== 0) {
+                        emptyCells.push({ x, y });
+                    }
+                }
+            }
+            
+            for (let i = 0; i < wallCount && emptyCells.length > 0; i++) {
+                const idx = Math.floor(seededRandom() * emptyCells.length);
+                const { x, y } = emptyCells.splice(idx, 1)[0];
                 
                 labyrinthState.grid[y][x] = 'wall';
                 labyrinthState.walls.push({ x, y });
@@ -1976,12 +2120,9 @@ if (result.success) {
             
             // Generate danger zones (red death cells) - about 10% of cells
             const dangerCount = Math.floor(LABYRINTH_SIZE * LABYRINTH_SIZE * 0.1);
-            for (let i = 0; i < dangerCount; i++) {
-                let x, y;
-                do {
-                    x = Math.floor(Math.random() * LABYRINTH_SIZE);
-                    y = Math.floor(Math.random() * LABYRINTH_SIZE);
-                } while ((x === 0 && y === 0) || labyrinthState.grid[y][x] !== 'empty');
+            for (let i = 0; i < dangerCount && emptyCells.length > 0; i++) {
+                const idx = Math.floor(seededRandom() * emptyCells.length);
+                const { x, y } = emptyCells.splice(idx, 1)[0];
                 
                 labyrinthState.grid[y][x] = 'danger';
                 labyrinthState.dangerZones.push({ x, y });
