@@ -1901,7 +1901,7 @@ if (result.success) {
 
                 // Check if landing position is blocked by something that can't be jumped over
                 const landingCell = gameState.grid[landingY][landingX];
-                if (landingCell === 'wall' || landingCell === 'danger' || landingCell.startsWith('drop_') || landingCell.startsWith('teleporter_') || landingCell === 'moving_block') {
+                if (landingCell === 'wall' || landingCell === 'danger' || landingCell.startsWith('drop_') || landingCell === 'moving_block') {
                     return { success: false, message: `Cannot jump ${direction}: Path blocked after obstacle!` };
                 }
 
