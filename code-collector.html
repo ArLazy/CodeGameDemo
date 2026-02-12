@@ -1531,19 +1531,29 @@ Watch out for moving blocks!"></textarea>
                     
                     addToHistory(`Reversing last ${commandsToReverse.length} command(s)...`, 'info');
                     
-                    // Reverse and execute each command
+// Reverse and execute each command
                     for (let i = commandsToReverse.length - 1; i >= 0; i--) {
-                        const reversedCmd = reverseCommand(commandsToReverse[i]);
+                        let cmdToExecute = commandsToReverse[i];
+                        
+                        // Convert drop/collect commands to stop
+                        if (cmdToExecute.command === 'drop' || cmdToExecute.command === 'collect') {
+                            cmdToExecute = {
+                                valid: true,
+                                command: 'stop',
+                                turns: 1,
+                                originalLine: 'stop'
+                            };
+                        }
+                        
+                        const reversedCmd = reverseCommand(cmdToExecute);
                         addToHistory(`  [REV] ${reversedCmd.originalLine}`, 'rev');
                         
                         const result = await executeParsedCommand(reversedCmd, true);
                         
-                        if (result.success) {
+if (result.success) {
                             addToHistory(result.message, 'success');
-                            // Add to history if it's a reversible command
-                            if (reversedCmd.command !== 'collect' && reversedCmd.command !== 'drop' && reversedCmd.command !== 'stop') {
-                                commandHistory.push(reversedCmd);
-                            }
+                            // Add to history
+                            commandHistory.push(reversedCmd);
                         } else {
                             addToHistory(result.message, result.dead ? 'dead' : 'error');
                             if (result.dead) {
@@ -1589,11 +1599,9 @@ Watch out for moving blocks!"></textarea>
                         
                         const result = await executeParsedCommand(cmd);
                         
-                        if (result.success) {
+if (result.success) {
                             addToHistory(result.message, 'success');
-                            if (cmd.command !== 'collect' && cmd.command !== 'drop' && cmd.command !== 'stop') {
-                                commandHistory.push(cmd);
-                            }
+                            commandHistory.push(cmd);
                         } else {
                             addToHistory(result.message, result.dead ? 'dead' : 'error');
                             if (result.dead) {
@@ -1626,12 +1634,10 @@ Watch out for moving blocks!"></textarea>
                 
                 const result = await executeParsedCommand(parsed);
                 
-                if (result.success) {
+if (result.success) {
                     addToHistory(result.message, 'success');
-                    // Add to command history (but not for collect/drop)
-                    if (parsed.command !== 'collect' && parsed.command !== 'drop' && parsed.command !== 'stop') {
-                        commandHistory.push(parsed);
-                    }
+                    // Add to command history
+                    commandHistory.push(parsed);
                 } else {
                     addToHistory(result.message, result.dead ? 'dead' : 'error');
                     if (result.dead) {
