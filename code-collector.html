@@ -501,6 +501,7 @@ Watch out for moving blocks!"></textarea>
                     <li><code>rev [repeat n]</code> - Reverse last command(s)</li>
                     <li><code>repeat n</code> - Repeat last n commands</li>
                     <li><code>stop [n]</code> - Wait n turns (blocks move!)</li>
+                    <li><code>jump [dir]</code> - Jump over a wall, red wall (danger zone), or portal</li>
                 </ul>
                 <p style="margin-top: 8px; color: #00ffff;">
                     <strong>rev repeat n:</strong> Takes last n commands, reverses direction, and executes them!
@@ -1533,7 +1534,7 @@ Watch out for moving blocks!"></textarea>
                     for (let i = 0; i < cmd.turns; i++) {
                         moveMovingBlocks();
                         gameState.steps++;
-                        
+
                         if (checkMovingBlockCollision()) {
                             draw();
                             return {
@@ -1542,17 +1543,33 @@ Watch out for moving blocks!"></textarea>
                                 message: `Stopped for ${i + 1} turn(s) - Moving block crushed you! 💀`
                             };
                         }
-                        
+
                         draw();
                         await sleep(200);
                     }
                     result = { success: true, message: `Stopped for ${cmd.turns} turn(s) - Moving blocks continued!` };
                     break;
-                    
+
+                case 'jump':
+                    result = await executeJumpCommand(cmd.direction);
+                    if (result.success) {
+                        moveMovingBlocks();
+                        if (checkMovingBlockCollision()) {
+                            gameState.playerDead = true;
+                            gameState.gameEnded = true;
+                            draw();
+                            updateStatus('GAME OVER - Crushed by moving block!', 'dead');
+                            addToHistory('💀 You were hit by a moving block!', 'dead');
+                            return { success: false, dead: true, message: 'Killed by moving block!' };
+                        }
+                        draw();
+                    }
+                    break;
+
                 default:
                     result = { success: false, message: `Unknown command type: ${cmd.command}` };
             }
-            
+
             return result;
         }
 
@@ -1620,6 +1637,17 @@ Watch out for moving blocks!"></textarea>
                     return { valid: false, error: `Invalid stop count: "${parts[1]}"` };
                 }
                 return { valid: true, command: 'stop', turns: turns, originalLine: line };
+            } else if (command === 'jump') {
+                const direction = parts[1] ? parts[1].toLowerCase() : null;
+                if (!direction || !['up', 'down', 'left', 'right'].includes(direction)) {
+                    return { valid: false, error: 'jump command requires a valid direction (up, down, left, right)' };
+                }
+                return {
+                    valid: true,
+                    command: 'jump',
+                    direction: direction,
+                    originalLine: line
+                };
             } else {
                 return { valid: false, error: `Unknown command: "${command}"` };
             }
@@ -1837,6 +1865,65 @@ if (result.success) {
                     addToHistory('Execution complete. Not all resources delivered.', 'error');
                     gameState.gameEnded = true;
                 }
+            }
+        }
+
+        // Execute jump command
+        async function executeJumpCommand(direction) {
+            let dx = 0, dy = 0;
+            switch (direction) {
+                case 'up': dy = -1; break;
+                case 'down': dy = 1; break;
+                case 'left': dx = -1; break;
+                case 'right': dx = 1; break;
+            }
+
+            // Calculate the position of the obstacle (one cell ahead)
+            const obstacleX = gameState.player.x + dx;
+            const obstacleY = gameState.player.y + dy;
+
+            // Check if obstacle position is out of bounds
+            if (obstacleX < 0 || obstacleX >= GRID_SIZE || obstacleY < 0 || obstacleY >= GRID_SIZE) {
+                return { success: false, message: `Cannot jump ${direction}: Out of bounds!` };
+            }
+
+            // Check if the obstacle cell is a wall, danger zone, or teleporter
+            const obstacleCell = gameState.grid[obstacleY][obstacleX];
+            if (obstacleCell === 'wall' || obstacleCell === 'danger' || obstacleCell.startsWith('teleporter_')) {
+                // Calculate the landing position (one cell beyond the obstacle)
+                const landingX = obstacleX + dx;
+                const landingY = obstacleY + dy;
+
+                // Check if landing position is out of bounds
+                if (landingX < 0 || landingX >= GRID_SIZE || landingY < 0 || landingY >= GRID_SIZE) {
+                    return { success: false, message: `Cannot jump ${direction}: Landing position out of bounds!` };
+                }
+
+                // Check if landing position is blocked by something that can't be jumped over
+                const landingCell = gameState.grid[landingY][landingX];
+                if (landingCell === 'wall' || landingCell === 'danger' || landingCell.startsWith('drop_') || landingCell.startsWith('teleporter_') || landingCell === 'moving_block') {
+                    return { success: false, message: `Cannot jump ${direction}: Path blocked after obstacle!` };
+                }
+
+                // Perform the jump - move to the landing position
+                gameState.player.x = landingX;
+                gameState.player.y = landingY;
+                
+                // Check if player stepped on door at landing position
+                checkDoor();
+
+                // Check for teleporter after landing
+                const teleportResult = checkTeleporter();
+                if (teleportResult.teleported) {
+                    addToHistory(teleportResult.message, 'success');
+                }
+
+                gameState.steps++;
+                draw();
+                return { success: true, message: `Jumped ${direction} over ${obstacleCell === 'wall' ? 'wall' : obstacleCell === 'danger' ? 'red wall' : 'portal'}!` };
+            } else {
+                // If there's no obstacle to jump over, just move normally
+                return movePlayer(dx, dy);
             }
         }
 
