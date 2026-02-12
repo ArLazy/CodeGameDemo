@@ -1149,6 +1149,16 @@ Watch out for moving blocks!"></textarea>
             // Draw walls
             ctx.fillStyle = '#555';
             gameState.walls.forEach(wall => {
+                // Check if this wall is part of the door structure
+                const isDoorWall = gameState.doorStructure && 
+                    gameState.doorStructure.walls.some(dw => dw.x === wall.x && dw.y === wall.y);
+                
+                if (isDoorWall) {
+                    ctx.fillStyle = '#6b5648'; // Special color for door structure walls
+                } else {
+                    ctx.fillStyle = '#555'; // Regular wall color
+                }
+                
                 ctx.fillRect(
                     wall.x * CELL_SIZE + 2,
                     wall.y * CELL_SIZE + 2,
@@ -1168,7 +1178,7 @@ Watch out for moving blocks!"></textarea>
                     CELL_SIZE - 4,
                     CELL_SIZE - 4
                 );
-                
+
                 // Draw door handle
                 ctx.fillStyle = '#ffd700';
                 ctx.beginPath();
@@ -1180,7 +1190,7 @@ Watch out for moving blocks!"></textarea>
                     Math.PI * 2
                 );
                 ctx.fill();
-                
+
                 // Draw lock symbol
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 10px Courier New';
@@ -1887,6 +1897,17 @@ if (result.success) {
                 return { success: false, message: `Cannot jump ${direction}: Out of bounds!` };
             }
 
+            // Check if the obstacle is part of the door structure (walls or door)
+            const isObstacleDoorRelated = gameState.doorStructure && (
+                (gameState.doorStructure.door.x === obstacleX && gameState.doorStructure.door.y === obstacleY) ||
+                gameState.doorStructure.walls.some(wall => wall.x === obstacleX && wall.y === obstacleY)
+            );
+
+            // If the obstacle is part of the door structure, jumping is not allowed
+            if (isObstacleDoorRelated) {
+                return { success: false, message: `Cannot jump ${direction}: Door structure blocks the way!` };
+            }
+
             // Check if the obstacle cell is a wall, danger zone, or teleporter
             const obstacleCell = gameState.grid[obstacleY][obstacleX];
             if (obstacleCell === 'wall' || obstacleCell === 'danger' || obstacleCell.startsWith('teleporter_')) {
@@ -1958,7 +1979,13 @@ if (result.success) {
                     break;
                 }
                 
-                if (gameState.grid[newY][newX] === 'wall') {
+                // Check if the target cell is part of the door structure (walls or door when closed)
+                const isTargetDoorRelated = gameState.doorStructure && !gameState.doorStructure.isOpen && (
+                    (gameState.doorStructure.door.x === newX && gameState.doorStructure.door.y === newY) ||
+                    gameState.doorStructure.walls.some(wall => wall.x === newX && wall.y === newY)
+                );
+
+                if (gameState.grid[newY][newX] === 'wall' || isTargetDoorRelated) {
                     break;
                 }
                 
@@ -2108,25 +2135,35 @@ if (result.success) {
         function movePlayer(dx, dy) {
             const newX = gameState.player.x + dx;
             const newY = gameState.player.y + dy;
-            
+
             if (newX < 0 || newX >= GRID_SIZE || newY < 0 || newY >= GRID_SIZE) {
                 return { success: false, message: 'Cannot move: Out of bounds!' };
             }
-            
+
+            // Check if the target cell is part of the door structure (walls or door when closed)
+            const isTargetDoorRelated = gameState.doorStructure && !gameState.doorStructure.isOpen && (
+                (gameState.doorStructure.door.x === newX && gameState.doorStructure.door.y === newY) ||
+                gameState.doorStructure.walls.some(wall => wall.x === newX && wall.y === newY)
+            );
+
+            if (isTargetDoorRelated) {
+                return { success: false, message: 'Cannot move: Door structure blocks the way!' };
+            }
+
             if (gameState.grid[newY][newX] === 'wall') {
                 return { success: false, message: 'Cannot move: Wall in the way!' };
             }
-            
+
             if (gameState.grid[newY][newX] === 'danger') {
                 gameState.player.x = newX;
                 gameState.player.y = newY;
-                return { 
-                    success: false, 
+                return {
+                    success: false,
                     dead: true,
-                    message: 'You entered a DANGER ZONE and died! 💀' 
+                    message: 'You entered a DANGER ZONE and died! 💀'
                 };
             }
-            
+
             if (gameState.grid[newY][newX] === 'moving_block') {
                 gameState.player.x = newX;
                 gameState.player.y = newY;
@@ -2136,13 +2173,13 @@ if (result.success) {
                     message: 'You walked into a moving block and got crushed! 💀'
                 };
             }
-            
+
             gameState.player.x = newX;
             gameState.player.y = newY;
-            
+
             // Check if player stepped on door
             checkDoor();
-            
+
             const dir = dx === 1 ? 'right' : dx === -1 ? 'left' : dy === 1 ? 'down' : 'up';
             return { success: true, message: `Moved ${dir} to (${newX}, ${newY})` };
         }
