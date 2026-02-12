@@ -919,8 +919,8 @@ Watch out for moving blocks!"></textarea>
                 });
             }
             
-            // Generate moving blocks (2-3 moving blocks)
-            const movingBlockCount = Math.floor(seededRandom() * 2) + 2;
+            // Generate moving blocks (3-5 moving blocks)
+            const movingBlockCount = Math.floor(seededRandom() * 3) + 3;
             // Rebuild empty cells list
             emptyCells = [];
             for (let y = 0; y < GRID_SIZE; y++) {
