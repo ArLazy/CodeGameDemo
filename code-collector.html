@@ -405,6 +405,10 @@
         <div class="left-panel">
             <canvas id="gameCanvas" width="600" height="600"></canvas>
             
+            <div id="canvasSeedDisplay" style="margin-top: 8px; padding: 8px 12px; background: rgba(0, 0, 0, 0.85); border: 2px solid #4ecca3; border-radius: 4px; color: #4ecca3; font-family: 'Courier New', monospace; font-size: 14px; font-weight: bold; text-align: center; display: none;">
+                Seed: <span id="canvasSeedValue"></span>
+            </div>
+            
             <div class="info-panel">
                 <h3>Game Status</h3>
                 <div class="stats">
@@ -774,6 +778,14 @@ Watch out for moving blocks!"></textarea>
             setSeed(seed);
             seedDisplay.textContent = `Seed: ${seed}`;
             seedDisplay.style.display = 'inline';
+            
+            // Update canvas seed display
+            const canvasSeedDisplay = document.getElementById('canvasSeedDisplay');
+            const canvasSeedValue = document.getElementById('canvasSeedValue');
+            if (canvasSeedDisplay && canvasSeedValue) {
+                canvasSeedValue.textContent = seed;
+                canvasSeedDisplay.style.display = 'block';
+            }
             
             initGrid();
             commandHistory = []; // Reset command history
@@ -1246,33 +1258,6 @@ Watch out for moving blocks!"></textarea>
                     );
                     ctx.fill();
                 }
-            }
-            
-            // Draw seed in bottom-left corner
-            if (currentSeed) {
-                ctx.font = 'bold 12px Courier New';
-                const seedText = `Seed: ${currentSeed}`;
-                const textWidth = ctx.measureText(seedText).width;
-                const padding = 8;
-                const rectX = 5;
-                const rectY = canvas.height - 25;
-                const rectWidth = textWidth + (padding * 2);
-                const rectHeight = 20;
-                
-                // Draw high-contrast background
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-                ctx.fillRect(rectX, rectY, rectWidth, rectHeight);
-                
-                // Draw border for better visibility
-                ctx.strokeStyle = '#4ecca3';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
-                
-                // Draw seed text in high-contrast color
-                ctx.fillStyle = '#4ecca3';
-                ctx.textAlign = 'left';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(seedText, rectX + padding, rectY + rectHeight / 2);
             }
         }
 
