@@ -495,7 +495,7 @@ Watch out for moving blocks!"></textarea>
                     <li><code>down [n]</code> - Move down n times</li>
                     <li><code>left [n]</code> - Move left n times</li>
                     <li><code>right [n]</code> - Move right n times</li>
-                    <li><code>bye [dir] [while condition]</code> - Move until blocked or condition met (coin, portal, wall, mine, zone, door)</li>
+                    <li><code>bye [dir] [while condition] [on pos]</code> - Move until blocked/condition (coin, portal, wall, mine, zone, door) at position (l=left, r=right, b=below, a=above)</li>
                     <li><code>collect</code> - Collect resource (max 3, becomes stop if no coin)</li>
                     <li><code>drop</code> - Deliver to matching zone (becomes stop if no zone)</li>
                     <li><code>rev [repeat n]</code> - Reverse last command(s)</li>
@@ -1381,7 +1381,14 @@ Watch out for moving blocks!"></textarea>
             if (cmd.command === 'movement') {
                 reversed.originalLine = `${reversed.direction}${reversed.coefficient > 1 ? ' ' + reversed.coefficient : ''}`;
             } else if (cmd.command === 'bye') {
-                reversed.originalLine = `bye ${reversed.direction}${reversed.whileCondition ? ' while ' + reversed.whileCondition : ''}`;
+                let byeCmd = `bye ${reversed.direction}`;
+                if (reversed.whileCondition) {
+                    byeCmd += ` while ${reversed.whileCondition}`;
+                    if (reversed.onPosition) {
+                        byeCmd += ` on ${reversed.onPosition}`;
+                    }
+                }
+                reversed.originalLine = byeCmd;
             }
             
             return reversed;
@@ -1447,7 +1454,7 @@ Watch out for moving blocks!"></textarea>
                     break;
                     
                 case 'bye':
-                    result = await executeByeCommand(cmd.direction, cmd.whileCondition);
+                    result = await executeByeCommand(cmd.direction, cmd.whileCondition, cmd.onPosition);
                     break;
                     
                 case 'collect':
@@ -1568,15 +1575,27 @@ Watch out for moving blocks!"></textarea>
                     return { valid: false, error: 'bye command requires a valid direction' };
                 }
                 const validConditions = ['coin', 'portal', 'wall', 'mine', 'zone', 'door'];
-                const whileCondition = parts.length >= 4 && 
-                                 parts[2].toLowerCase() === 'while' && 
-                                 validConditions.includes(parts[3].toLowerCase()) ? 
-                                 parts[3].toLowerCase() : null;
+                const validPositions = ['l', 'r', 'b', 'a'];
+                let whileCondition = null;
+                let onPosition = null;
+                
+                if (parts.length >= 4 && parts[2].toLowerCase() === 'while') {
+                    if (validConditions.includes(parts[3].toLowerCase())) {
+                        whileCondition = parts[3].toLowerCase();
+                        // Check for "on" modifier
+                        if (parts.length >= 6 && parts[4].toLowerCase() === 'on' &&
+                            validPositions.includes(parts[5].toLowerCase())) {
+                            onPosition = parts[5].toLowerCase();
+                        }
+                    }
+                }
+                
                 return {
                     valid: true,
                     command: 'bye',
                     direction: direction,
                     whileCondition: whileCondition,
+                    onPosition: onPosition,
                     originalLine: line
                 };
             } else if (command === 'collect') {
@@ -1818,7 +1837,7 @@ if (result.success) {
         }
 
         // Execute bye command
-        async function executeByeCommand(direction, whileCondition) {
+        async function executeByeCommand(direction, whileCondition, onPosition) {
             let dx = 0, dy = 0;
             switch (direction) {
                 case 'up': dy = -1; break;
@@ -1828,6 +1847,17 @@ if (result.success) {
             }
             
             let moveCount = 0;
+            
+            // Helper to get relative position
+            const getRelativePos = (pos) => {
+                switch (pos) {
+                    case 'l': return { x: gameState.player.x - 1, y: gameState.player.y };
+                    case 'r': return { x: gameState.player.x + 1, y: gameState.player.y };
+                    case 'b': return { x: gameState.player.x, y: gameState.player.y + 1 };
+                    case 'a': return { x: gameState.player.x, y: gameState.player.y - 1 };
+                    default: return { x: gameState.player.x, y: gameState.player.y };
+                }
+            };
             
             while (true) {
                 const newX = gameState.player.x + dx;
@@ -1905,58 +1935,65 @@ if (result.success) {
                 
                 // Check while conditions
                 if (whileCondition) {
+                    const checkPos = onPosition ? getRelativePos(onPosition) : 
+                                    { x: gameState.player.x, y: gameState.player.y };
+                    const checkCell = (checkPos.x >= 0 && checkPos.x < GRID_SIZE && 
+                                      checkPos.y >= 0 && checkPos.y < GRID_SIZE) ?
+                                      gameState.grid[checkPos.y][checkPos.x] : null;
                     const currentCell = gameState.grid[gameState.player.y][gameState.player.x];
                     let conditionMet = false;
                     let message = '';
+                    const positionText = onPosition ? ` on ${onPosition}` : '';
                     
                     switch (whileCondition) {
                         case 'coin':
-                            const resource = gameState.resources.find(
-                                r => r.x === gameState.player.x && r.y === gameState.player.y && !r.collected
-                            );
-                            if (resource) {
-                                conditionMet = true;
-                                message = `Moved ${direction} ${moveCount} time(s) and found a ${resource.color} coin!`;
+                            if (onPosition) {
+                                const resource = gameState.resources.find(
+                                    r => r.x === checkPos.x && r.y === checkPos.y && !r.collected
+                                );
+                                if (resource) {
+                                    conditionMet = true;
+                                    message = `Moved ${direction} ${moveCount} time(s) and found a ${resource.color} coin${positionText}!`;
+                                }
+                            } else {
+                                const resource = gameState.resources.find(
+                                    r => r.x === gameState.player.x && r.y === gameState.player.y && !r.collected
+                                );
+                                if (resource) {
+                                    conditionMet = true;
+                                    message = `Moved ${direction} ${moveCount} time(s) and found a ${resource.color} coin!`;
+                                }
                             }
                             break;
                         case 'portal':
-                            if (currentCell.startsWith('teleporter_')) {
+                            if (checkCell && checkCell.startsWith('teleporter_')) {
                                 conditionMet = true;
-                                message = `Moved ${direction} ${moveCount} time(s) and found a portal!`;
+                                message = `Moved ${direction} ${moveCount} time(s) and found a portal${positionText}!`;
                             }
                             break;
                         case 'wall':
-                            // This would be blocked by the wall check above, so it stops before hitting
-                            // But we can check if we're adjacent to a wall
-                            const nextX = gameState.player.x + dx;
-                            const nextY = gameState.player.y + dy;
-                            if (nextX < 0 || nextX >= GRID_SIZE || nextY < 0 || nextY >= GRID_SIZE ||
-                                gameState.grid[nextY][nextX] === 'wall') {
+                            if (checkCell === 'wall') {
                                 conditionMet = true;
-                                message = `Moved ${direction} ${moveCount} time(s) and stopped before a wall!`;
+                                message = `Moved ${direction} ${moveCount} time(s) and found a wall${positionText}!`;
                             }
                             break;
                         case 'mine':
-                            // Check if next cell is a mine (danger) and stop before stepping on it
-                            const nextMineX = gameState.player.x + dx;
-                            const nextMineY = gameState.player.y + dy;
-                            if (nextMineX >= 0 && nextMineX < GRID_SIZE && nextMineY >= 0 && nextMineY < GRID_SIZE &&
-                                gameState.grid[nextMineY][nextMineX] === 'danger') {
+                            if (checkCell === 'danger') {
                                 conditionMet = true;
-                                message = `Moved ${direction} ${moveCount} time(s) and stopped before a mine!`;
+                                message = `Moved ${direction} ${moveCount} time(s) and found a mine${positionText}!`;
                             }
                             break;
                         case 'zone':
-                            if (currentCell.startsWith('drop_')) {
+                            if (checkCell && checkCell.startsWith('drop_')) {
+                                const zoneColor = checkCell.replace('drop_', '');
                                 conditionMet = true;
-                                const zoneColor = currentCell.replace('drop_', '');
-                                message = `Moved ${direction} ${moveCount} time(s) and found a ${zoneColor} drop zone!`;
+                                message = `Moved ${direction} ${moveCount} time(s) and found a ${zoneColor} drop zone${positionText}!`;
                             }
                             break;
                         case 'door':
-                            if (currentCell === 'door') {
+                            if (checkCell === 'door') {
                                 conditionMet = true;
-                                message = `Moved ${direction} ${moveCount} time(s) and found a door!`;
+                                message = `Moved ${direction} ${moveCount} time(s) and found a door${positionText}!`;
                             }
                             break;
                     }
@@ -1971,7 +2008,8 @@ if (result.success) {
                 return { success: false, message: `Cannot move ${direction}: Blocked immediately!` };
             }
             
-            const condition = whileCondition ? `until blocked (no ${whileCondition} found)` : "until blocked";
+            const positionText = onPosition ? ` on ${onPosition}` : '';
+            const condition = whileCondition ? `until blocked (no ${whileCondition}${positionText} found)` : "until blocked";
             return { success: true, message: `Moved ${direction} ${moveCount} time(s) ${condition}` };
         }
 
