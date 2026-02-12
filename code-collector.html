@@ -651,12 +651,12 @@ Watch out for moving blocks!"></textarea>
         let commandHistory = []; // Store executed commands for rev/repeat
 
         // Labyrinth minigame state
-        const LABYRINTH_SIZE = 10;
+        const LABYRINTH_WIDTH = 20;
+        const LABYRINTH_HEIGHT = 12;
         const LABYRINTH_CELL_SIZE = 35;
         let labyrinthState = {
             player: { x: 0, y: 0 },
             exit: { x: 0, y: 0 },
-            walls: [],
             dangerZones: [],
             grid: []
         };
@@ -2092,38 +2092,27 @@ if (result.success) {
         // Generate labyrinth for minigame
         function generateLabyrinth() {
             labyrinthState.grid = [];
-            labyrinthState.walls = [];
             labyrinthState.dangerZones = [];
             
-            for (let y = 0; y < LABYRINTH_SIZE; y++) {
+            for (let y = 0; y < LABYRINTH_HEIGHT; y++) {
                 labyrinthState.grid[y] = [];
-                for (let x = 0; x < LABYRINTH_SIZE; x++) {
+                for (let x = 0; x < LABYRINTH_WIDTH; x++) {
                     labyrinthState.grid[y][x] = 'empty';
                 }
             }
             
-            // Generate walls (about 30% of cells)
-            const wallCount = Math.floor(LABYRINTH_SIZE * LABYRINTH_SIZE * 0.3);
+            // Generate danger walls (about 25% of cells) - red walls that kill you
+            const dangerWallCount = Math.floor(LABYRINTH_WIDTH * LABYRINTH_HEIGHT * 0.25);
             let emptyCells = [];
-            for (let y = 0; y < LABYRINTH_SIZE; y++) {
-                for (let x = 0; x < LABYRINTH_SIZE; x++) {
+            for (let y = 0; y < LABYRINTH_HEIGHT; y++) {
+                for (let x = 0; x < LABYRINTH_WIDTH; x++) {
                     if (x !== 0 || y !== 0) {
                         emptyCells.push({ x, y });
                     }
                 }
             }
             
-            for (let i = 0; i < wallCount && emptyCells.length > 0; i++) {
-                const idx = Math.floor(seededRandom() * emptyCells.length);
-                const { x, y } = emptyCells.splice(idx, 1)[0];
-                
-                labyrinthState.grid[y][x] = 'wall';
-                labyrinthState.walls.push({ x, y });
-            }
-            
-            // Generate danger zones (red death cells) - about 10% of cells
-            const dangerCount = Math.floor(LABYRINTH_SIZE * LABYRINTH_SIZE * 0.1);
-            for (let i = 0; i < dangerCount && emptyCells.length > 0; i++) {
+            for (let i = 0; i < dangerWallCount && emptyCells.length > 0; i++) {
                 const idx = Math.floor(seededRandom() * emptyCells.length);
                 const { x, y } = emptyCells.splice(idx, 1)[0];
                 
@@ -2132,16 +2121,14 @@ if (result.success) {
             }
             
             // Place exit at far corner
-            labyrinthState.exit = { x: LABYRINTH_SIZE - 1, y: LABYRINTH_SIZE - 1 };
+            labyrinthState.exit = { x: LABYRINTH_WIDTH - 1, y: LABYRINTH_HEIGHT - 1 };
             
             // Ensure exit is not blocked
-            if (labyrinthState.grid[LABYRINTH_SIZE - 1][LABYRINTH_SIZE - 1] !== 'empty') {
-                labyrinthState.grid[LABYRINTH_SIZE - 1][LABYRINTH_SIZE - 1] = 'empty';
-                // Remove from walls/danger if present
-                labyrinthState.walls = labyrinthState.walls.filter(w => 
-                    !(w.x === LABYRINTH_SIZE - 1 && w.y === LABYRINTH_SIZE - 1));
+            if (labyrinthState.grid[LABYRINTH_HEIGHT - 1][LABYRINTH_WIDTH - 1] !== 'empty') {
+                labyrinthState.grid[LABYRINTH_HEIGHT - 1][LABYRINTH_WIDTH - 1] = 'empty';
+                // Remove from danger if present
                 labyrinthState.dangerZones = labyrinthState.dangerZones.filter(d => 
-                    !(d.x === LABYRINTH_SIZE - 1 && d.y === LABYRINTH_SIZE - 1));
+                    !(d.x === LABYRINTH_WIDTH - 1 && d.y === LABYRINTH_HEIGHT - 1));
             }
             
             // Reset player position
@@ -2161,8 +2148,8 @@ if (result.success) {
                 modal.innerHTML = `
                     <div class="labyrinth-container">
                         <h2 class="labyrinth-title">DOOR LOCKED - LABYRINTH CHALLENGE</h2>
-                        <canvas id="labyrinthCanvas" class="labyrinth-canvas" width="350" height="350"></canvas>
-                        <p class="labyrinth-instructions">Use Arrow Keys or WASD to navigate. Avoid red death zones! Reach the green exit!</p>
+                        <canvas id="labyrinthCanvas" class="labyrinth-canvas" width="700" height="420"></canvas>
+                        <p class="labyrinth-instructions">Use Arrow Keys or WASD to navigate. ALL RED WALLS KILL YOU! Reach the green exit!</p>
                         <p id="labyrinthStatus" class="labyrinth-status"></p>
                         <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
                             <button onclick="generateNewLabyrinth()" style="background: #e94560; color: white; padding: 10px 20px; border: none; border-radius: 6px; font-family: 'Courier New', monospace; font-weight: bold; cursor: pointer;">New Maze</button>
@@ -2229,16 +2216,11 @@ if (result.success) {
             const newY = labyrinthState.player.y + dy;
             
             // Check bounds
-            if (newX < 0 || newX >= LABYRINTH_SIZE || newY < 0 || newY >= LABYRINTH_SIZE) {
+            if (newX < 0 || newX >= LABYRINTH_WIDTH || newY < 0 || newY >= LABYRINTH_HEIGHT) {
                 return;
             }
             
-            // Check wall collision
-            if (labyrinthState.grid[newY][newX] === 'wall') {
-                return;
-            }
-            
-            // Check danger zone
+            // Check danger zone (walls are now red danger zones that kill you)
             if (labyrinthState.grid[newY][newX] === 'danger') {
                 updateLabyrinthStatus('You died! Try again...');
                 labyrinthState.player = { x: 0, y: 0 }; // Reset to start
@@ -2310,14 +2292,16 @@ if (result.success) {
             // Draw grid lines
             ctx.strokeStyle = '#0f3460';
             ctx.lineWidth = 1;
-            for (let i = 0; i <= LABYRINTH_SIZE; i++) {
+            for (let i = 0; i <= LABYRINTH_WIDTH; i++) {
                 ctx.beginPath();
                 ctx.moveTo(i * LABYRINTH_CELL_SIZE, 0);
-                ctx.lineTo(i * LABYRINTH_CELL_SIZE, LABYRINTH_SIZE * LABYRINTH_CELL_SIZE);
+                ctx.lineTo(i * LABYRINTH_CELL_SIZE, LABYRINTH_HEIGHT * LABYRINTH_CELL_SIZE);
                 ctx.stroke();
+            }
+            for (let i = 0; i <= LABYRINTH_HEIGHT; i++) {
                 ctx.beginPath();
                 ctx.moveTo(0, i * LABYRINTH_CELL_SIZE);
-                ctx.lineTo(LABYRINTH_SIZE * LABYRINTH_CELL_SIZE, i * LABYRINTH_CELL_SIZE);
+                ctx.lineTo(LABYRINTH_WIDTH * LABYRINTH_CELL_SIZE, i * LABYRINTH_CELL_SIZE);
                 ctx.stroke();
             }
             
@@ -2341,17 +2325,6 @@ if (result.success) {
                 ctx.moveTo((danger.x + 1) * LABYRINTH_CELL_SIZE - 5, danger.y * LABYRINTH_CELL_SIZE + 5);
                 ctx.lineTo(danger.x * LABYRINTH_CELL_SIZE + 5, (danger.y + 1) * LABYRINTH_CELL_SIZE - 5);
                 ctx.stroke();
-            });
-            
-            // Draw walls
-            ctx.fillStyle = '#555';
-            labyrinthState.walls.forEach(wall => {
-                ctx.fillRect(
-                    wall.x * LABYRINTH_CELL_SIZE + 2,
-                    wall.y * LABYRINTH_CELL_SIZE + 2,
-                    LABYRINTH_CELL_SIZE - 4,
-                    LABYRINTH_CELL_SIZE - 4
-                );
             });
             
             // Draw exit
