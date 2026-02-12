@@ -472,10 +472,11 @@ Watch out for moving blocks!"></textarea>
                     <button class="btn-clear" onclick="clearConsole()">Clear</button>
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
-                    <input type="text" id="seedInput" placeholder="Seed (empty for random)" 
+                    <input type="text" id="seedInput" placeholder="Enter seed..." 
                            style="padding: 10px; border: 2px solid #0f3460; border-radius: 4px; 
                                   background: #0a0a14; color: #eee; font-family: inherit; font-size: 12px; 
-                                  width: 180px;" maxlength="20">
+                                  width: 140px;" maxlength="20">
+                    <button onclick="applySeed()" style="padding: 10px 15px; background: #4ecca3; color: #0a0a14; border: none; border-radius: 4px; font-family: inherit; font-size: 12px; font-weight: bold; cursor: pointer;">Apply</button>
                     <span id="currentSeedDisplay" style="color: #4ecca3; font-size: 11px; display: none;"></span>
                 </div>
             </div>
@@ -763,17 +764,27 @@ Watch out for moving blocks!"></textarea>
             });
         }
 
-        // Generate random task
-        function generateTask() {
-            // Handle seed
+        // Apply user-entered seed
+        function applySeed() {
             const seedInput = document.getElementById('seedInput');
-            const seedDisplay = document.getElementById('currentSeedDisplay');
-            let seed = seedInput.value.trim();
+            const seed = seedInput.value.trim();
             
             if (!seed) {
-                seed = generateRandomSeed();
-                seedInput.value = seed;
+                alert('Please enter a seed first');
+                return;
             }
+            
+            // Use the entered seed to generate the level
+            generateTaskWithSeed(seed);
+        }
+
+        // Generate task with a specific seed
+        function generateTaskWithSeed(seed) {
+            const seedInput = document.getElementById('seedInput');
+            const seedDisplay = document.getElementById('currentSeedDisplay');
+            
+            // Set the seed in the input field
+            seedInput.value = seed;
             
             setSeed(seed);
             seedDisplay.textContent = `Seed: ${seed}`;
@@ -990,6 +1001,13 @@ Watch out for moving blocks!"></textarea>
             updateStatus('Task ready - Write your code!', 'waiting');
             updateStats();
             draw();
+        }
+
+        // Generate random task
+        function generateTask() {
+            // Generate a new random seed and use it
+            const seed = generateRandomSeed();
+            generateTaskWithSeed(seed);
         }
 
         // Save original state for restart
