@@ -403,7 +403,7 @@
     
     <div class="game-container">
         <div class="left-panel">
-            <canvas id="gameCanvas" width="480" height="480"></canvas>
+            <canvas id="gameCanvas" width="600" height="600"></canvas>
             
             <div class="info-panel">
                 <h3>Game Status</h3>
@@ -545,7 +545,7 @@ Watch out for moving blocks!"></textarea>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const GRID_SIZE = 12;
+        const GRID_SIZE = 15;
         const CELL_SIZE = 40;
         const MAX_INVENTORY = 3;
         
@@ -633,10 +633,10 @@ Watch out for moving blocks!"></textarea>
                 attempts++;
                 
                 // Random position for top-left corner of 3x3 structure
-                // Add padding of 2 cells from all borders to ensure:
-                // 1. Structure doesn't touch edges
-                // 2. Cell in front of door is within bounds and can be empty
-                const startX = Math.floor(Math.random() * (GRID_SIZE - 5)) + 2;
+                // Structure must be at least 4 blocks from left and right edges
+                // Structure is 3 blocks wide, door is on the right side
+                // So startX >= 4 (left edge) and startX + 2 <= GRID_SIZE - 5 (right edge)
+                const startX = Math.floor(Math.random() * (GRID_SIZE - 10)) + 4;
                 const startY = Math.floor(Math.random() * (GRID_SIZE - 4)) + 2;
                 
                 // Check if area is clear (avoid 0,0 and existing grid elements)
