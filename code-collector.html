@@ -461,18 +461,18 @@ Watch out for moving blocks!"></textarea>
             </div>
             
             <div class="button-group">
-                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
-                    <input type="text" id="seedInput" placeholder="Seed (empty for random)" 
-                           style="padding: 10px; border: 2px solid #0f3460; border-radius: 4px; 
-                                  background: #0a0a14; color: #eee; font-family: inherit; font-size: 12px; 
-                                  width: 180px;" maxlength="20">
-                    <span id="currentSeedDisplay" style="color: #4ecca3; font-size: 11px; display: none;"></span>
-                </div>
                 <div style="display: flex; gap: 8px;">
                     <button class="btn-generate" onclick="generateTask()">Generate Task</button>
                     <button class="btn-restart" onclick="restartGame()">Restart</button>
                     <button class="btn-run" onclick="runCommands()">Run Code</button>
                     <button class="btn-clear" onclick="clearConsole()">Clear</button>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
+                    <input type="text" id="seedInput" placeholder="Seed (empty for random)" 
+                           style="padding: 10px; border: 2px solid #0f3460; border-radius: 4px; 
+                                  background: #0a0a14; color: #eee; font-family: inherit; font-size: 12px; 
+                                  width: 180px;" maxlength="20">
+                    <span id="currentSeedDisplay" style="color: #4ecca3; font-size: 11px; display: none;"></span>
                 </div>
             </div>
             
