@@ -843,8 +843,8 @@ Watch out for moving blocks!"></textarea>
                 gameState.walls.push({ x, y });
             }
             
-            // Generate danger zones (5-7 red cells)
-            const dangerCount = Math.floor(seededRandom() * 3) + 5;
+            // Generate danger zones (18-22 red cells)
+            const dangerCount = Math.floor(seededRandom() * 5) + 18;
             // Rebuild empty cells list
             emptyCells = [];
             for (let y = 0; y < GRID_SIZE; y++) {
