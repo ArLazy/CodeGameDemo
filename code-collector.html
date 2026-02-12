@@ -675,6 +675,7 @@ Watch out for moving blocks!"></textarea>
                 
                 // Place door on the right side (middle)
                 const doorPos = { x: startX + 2, y: startY + 1 };
+                gameState.grid[doorPos.y][doorPos.x] = 'door';
                 
                 // Inside cell (where coin will be)
                 const insidePos = { x: startX + 1, y: startY + 1 };
