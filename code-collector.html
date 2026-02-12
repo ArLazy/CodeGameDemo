@@ -1385,7 +1385,11 @@ Watch out for moving blocks!"></textarea>
                 if (reversed.whileCondition) {
                     byeCmd += ` while ${reversed.whileCondition}`;
                     if (reversed.onPosition) {
-                        byeCmd += ` on ${reversed.onPosition}`;
+                        // Reverse the position when reversing direction
+                        const positionOpposites = { 'l': 'r', 'r': 'l', 'a': 'b', 'b': 'a' };
+                        const reversedPos = positionOpposites[reversed.onPosition];
+                        reversed.onPosition = reversedPos;
+                        byeCmd += ` on ${reversedPos}`;
                     }
                 }
                 reversed.originalLine = byeCmd;
