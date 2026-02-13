@@ -614,6 +614,7 @@ Watch out for moving blocks!"></textarea>
             yellow: { resource: '#ffd700', drop: '#b8860b', light: '#ffeb99' },
             green: { resource: '#4ecca3', drop: '#2e8b57', light: '#99ffcc' },
             blue: { resource: '#3498db', drop: '#1e6091', light: '#99ccff' },
+            pink: { resource: '#ff69b4', drop: '#ff69b4', light: '#ffb3d9' },
             teleporterPurple: '#9932cc',
             teleporterOrange: '#ff8c00',
             movingBlock: '#ff6600'
@@ -713,7 +714,7 @@ Watch out for moving blocks!"></textarea>
                     if (areaClear) {
                         const frontCellX = sx + 3;
                         const frontCellY = sy + 1;
-                        if (frontCellX < GRID_SIZE && gameState.grid[frontCellY][frontCellX] === 'empty') {
+                        if (frontCellX < GRID_SIZE && frontCellY < GRID_SIZE && gameState.grid[frontCellY][frontCellX] === 'empty') {
                             validPositions.push({ startX: sx, startY: sy });
                         }
                     }
