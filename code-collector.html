@@ -1427,6 +1427,8 @@ Watch out for moving blocks!"></textarea>
                         const moveResult = movePlayer(dx, dy);
                         
                         if (moveResult.dead) {
+                            gameState.steps++;
+                            updateStats();
                             return moveResult;
                         }
                         
@@ -1438,10 +1440,12 @@ Watch out for moving blocks!"></textarea>
                             }
                         }
                         
+                        gameState.steps++;
                         moveMovingBlocks();
                         
                         if (checkMovingBlockCollision()) {
                             draw();
+                            updateStats();
                             return {
                                 success: false,
                                 dead: true,
@@ -1453,6 +1457,7 @@ Watch out for moving blocks!"></textarea>
                         if (teleportResult.teleported) {
                             addToHistory(teleportResult.message, 'success');
                             if (checkMovingBlockCollision()) {
+                                updateStats();
                                 return {
                                     success: false,
                                     dead: true,
@@ -1462,6 +1467,7 @@ Watch out for moving blocks!"></textarea>
                         }
                         
                         draw();
+                        updateStats();
                         await sleep(200);
                     }
                     
@@ -1475,11 +1481,13 @@ Watch out for moving blocks!"></textarea>
                 case 'collect':
                     result = collectResource();
                     if (result.success) {
+                        gameState.steps++;
                         moveMovingBlocks();
                         if (checkMovingBlockCollision()) {
                             gameState.playerDead = true;
                             gameState.gameEnded = true;
                             draw();
+                            updateStats();
                             updateStatus('GAME OVER - Crushed by moving block!', 'dead');
                             addToHistory('💀 You were hit by a moving block!', 'dead');
                             return { success: false, dead: true, message: 'Killed by moving block!' };
@@ -1489,13 +1497,15 @@ Watch out for moving blocks!"></textarea>
                             addToHistory(teleportResult.message, 'success');
                         }
                         draw();
+                        updateStats();
                     } else {
                         // Replace failed collect with stop 1
                         addToHistory('  (No resource - treating as stop 1)', 'info');
-                        moveMovingBlocks();
                         gameState.steps++;
+                        moveMovingBlocks();
                         if (checkMovingBlockCollision()) {
                             draw();
+                            updateStats();
                             return {
                                 success: false,
                                 dead: true,
@@ -1503,6 +1513,7 @@ Watch out for moving blocks!"></textarea>
                             };
                         }
                         draw();
+                        updateStats();
                         await sleep(200);
                         result = { success: true, message: 'No resource to collect - waited 1 turn' };
                     }
@@ -1511,23 +1522,27 @@ Watch out for moving blocks!"></textarea>
                 case 'drop':
                     result = dropResource();
                     if (result.success) {
+                        gameState.steps++;
                         moveMovingBlocks();
                         if (checkMovingBlockCollision()) {
                             gameState.playerDead = true;
                             gameState.gameEnded = true;
                             draw();
+                            updateStats();
                             updateStatus('GAME OVER - Crushed by moving block!', 'dead');
                             addToHistory('💀 You were hit by a moving block!', 'dead');
                             return { success: false, dead: true, message: 'Killed by moving block!' };
                         }
                         draw();
+                        updateStats();
                     } else {
                         // Replace failed drop with stop 1
                         addToHistory('  (No matching drop zone - treating as stop 1)', 'info');
-                        moveMovingBlocks();
                         gameState.steps++;
+                        moveMovingBlocks();
                         if (checkMovingBlockCollision()) {
                             draw();
+                            updateStats();
                             return {
                                 success: false,
                                 dead: true,
@@ -1535,6 +1550,7 @@ Watch out for moving blocks!"></textarea>
                             };
                         }
                         draw();
+                        updateStats();
                         await sleep(200);
                         result = { success: true, message: 'Not on delivery zone - waited 1 turn' };
                     }
@@ -1542,11 +1558,12 @@ Watch out for moving blocks!"></textarea>
                     
                 case 'stop':
                     for (let i = 0; i < cmd.turns; i++) {
-                        moveMovingBlocks();
                         gameState.steps++;
+                        moveMovingBlocks();
 
                         if (checkMovingBlockCollision()) {
                             draw();
+                            updateStats();
                             return {
                                 success: false,
                                 dead: true,
@@ -1555,6 +1572,7 @@ Watch out for moving blocks!"></textarea>
                         }
 
                         draw();
+                        updateStats();
                         await sleep(200);
                     }
                     result = { success: true, message: `Stopped for ${cmd.turns} turn(s) - Moving blocks continued!` };
@@ -1568,11 +1586,13 @@ Watch out for moving blocks!"></textarea>
                             gameState.playerDead = true;
                             gameState.gameEnded = true;
                             draw();
+                            updateStats();
                             updateStatus('GAME OVER - Crushed by moving block!', 'dead');
                             addToHistory('💀 You were hit by a moving block!', 'dead');
                             return { success: false, dead: true, message: 'Killed by moving block!' };
                         }
                         draw();
+                        updateStats();
                     }
                     break;
 
@@ -1940,11 +1960,17 @@ if (result.success) {
                 }
 
                 gameState.steps++;
+                updateStats();
                 draw();
                 return { success: true, message: `Jumped ${direction} over ${obstacleCell === 'wall' ? 'wall' : obstacleCell === 'danger' ? 'red wall' : 'portal'}!` };
             } else {
-                // If there's no obstacle to jump over, just move normally
-                return movePlayer(dx, dy);
+                // If there's no obstacle to jump over, just move normally (counts as a step)
+                const moveResult = movePlayer(dx, dy);
+                if (moveResult.success || moveResult.dead) {
+                    gameState.steps++;
+                    updateStats();
+                }
+                return moveResult;
             }
         }
 
@@ -1995,6 +2021,7 @@ if (result.success) {
                     moveCount++;
                     gameState.steps++;
                     draw();
+                    updateStats();
                     return { 
                         success: false, 
                         dead: true,
@@ -2008,6 +2035,7 @@ if (result.success) {
                     moveCount++;
                     gameState.steps++;
                     draw();
+                    updateStats();
                     return {
                         success: false,
                         dead: true,
@@ -2024,6 +2052,7 @@ if (result.success) {
                 
                 if (checkMovingBlockCollision()) {
                     draw();
+                    updateStats();
                     return {
                         success: false,
                         dead: true,
@@ -2036,6 +2065,7 @@ if (result.success) {
                     draw();
                     addToHistory(teleportResult.message, 'success');
                     if (checkMovingBlockCollision()) {
+                        updateStats();
                         return {
                             success: false,
                             dead: true,
@@ -2045,6 +2075,7 @@ if (result.success) {
                 }
                 
                 draw();
+                updateStats();
                 
                 // Check if player stepped on door
                 checkDoor();
