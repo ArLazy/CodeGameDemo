@@ -400,6 +400,10 @@
     </style>
 </head>
 <body>
+    <audio id="bgMusic" loop>
+        <source src="Terminal_Focus.mp3" type="audio/mpeg">
+    </audio>
+    
     <h1>CODE COLLECTOR</h1>
     
     <div class="game-container">
@@ -472,6 +476,7 @@ Watch out for moving blocks!"></textarea>
             <div class="button-group">
                 <div style="display: flex; gap: 8px;">
                     <button class="btn-generate" onclick="generateTask()">Generate Task</button>
+                    <button class="btn-clear" onclick="toggleMusic()" id="musicBtn">Music: ON</button>
                     <button class="btn-restart" onclick="restartGame()">Restart</button>
                     <button class="btn-run" onclick="runCommands()">Run Code</button>
                     <button class="btn-clear" onclick="clearConsole()">Clear</button>
@@ -562,11 +567,30 @@ Watch out for moving blocks!"></textarea>
         </div>
     </div>
 
-    <script>
+<script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const GRID_SIZE = 15;
         const CELL_SIZE = 40;
+        
+        const bgMusic = document.getElementById('bgMusic');
+        bgMusic.volume = 0.2;
+        
+        function toggleMusic() {
+            const btn = document.getElementById('musicBtn');
+            if (bgMusic.paused) {
+                bgMusic.play().catch(e => console.log('Audio autoplay blocked'));
+                btn.textContent = 'Music: ON';
+            } else {
+                bgMusic.pause();
+                btn.textContent = 'Music: OFF';
+            }
+        }
+        
+        function stopMusic() {
+            bgMusic.pause();
+            bgMusic.currentTime = 0;
+        }
         
         // Seeded PRNG (Mulberry32)
         let seedState = 0;
@@ -1013,6 +1037,9 @@ Watch out for moving blocks!"></textarea>
             });
             
             saveOriginalState();
+            
+            // Start background music
+            bgMusic.play().catch(e => console.log('Audio autoplay blocked'));
             
             // Reset timer for new task
             resetTimer();
