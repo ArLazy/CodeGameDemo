@@ -1609,15 +1609,14 @@ Watch out for moving blocks!"></textarea>
             const command = parts[0].toLowerCase();
             
             if (['up', 'down', 'left', 'right'].includes(command)) {
-                const coefficient = parts[1] ? parseInt(parts[1]) : 1;
-                if (isNaN(coefficient) || coefficient < 1) {
-                    return { valid: false, error: `Invalid coefficient: "${parts[1]}"` };
+                if (parts.length > 1) {
+                    return { valid: false, error: `Direction commands cannot have parameters. Use "${command}" instead of "${line}"` };
                 }
                 return {
                     valid: true,
                     command: 'movement',
                     direction: command,
-                    coefficient: coefficient,
+                    coefficient: 1,
                     originalLine: line
                 };
             } else if (command === 'bye') {
