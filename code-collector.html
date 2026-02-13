@@ -648,7 +648,10 @@ Watch out for moving blocks!"></textarea>
             originalMovingBlocks: [],
             doorStructure: null,
             labyrinthCompleted: false,
-            labyrinthActive: false
+            labyrinthActive: false,
+            yellowCoinCollected: false,
+            codeLines: 0,
+            finalScore: null
         };
 
         let gameState = JSON.parse(JSON.stringify(initialState));
@@ -824,7 +827,10 @@ Watch out for moving blocks!"></textarea>
             gameState.doorStructure = null;
             gameState.labyrinthCompleted = false;
             gameState.labyrinthActive = false;
-            
+            gameState.yellowCoinCollected = false;
+            gameState.codeLines = 0;
+            gameState.finalScore = null;
+
             // Generate door structure with 7 walls and 1 door
             generateDoorStructure();
             
@@ -1060,6 +1066,9 @@ Watch out for moving blocks!"></textarea>
             gameState.playerDead = false;
             gameState.labyrinthCompleted = false;
             gameState.labyrinthActive = false;
+            gameState.yellowCoinCollected = false;
+            gameState.codeLines = 0;
+            gameState.finalScore = null;
             
             // Reset timer
             resetTimer();
@@ -1736,6 +1745,9 @@ Watch out for moving blocks!"></textarea>
             
             const lines = input.split('\n').map(line => line.trim()).filter(line => line);
             
+            // Store the number of code lines for scoring
+            gameState.codeLines = lines.length;
+            
             for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
                 // Wait if labyrinth is active
                 await waitForLabyrinth();
@@ -1866,6 +1878,7 @@ if (result.success) {
                                 gameState.playerDead = true;
                                 gameState.gameEnded = true;
                                 stopTimer();
+                                calculateFinalScore(false);
                                 draw();
                                 updateStatus('GAME OVER - You died!', 'dead');
                                 gameState.isRunning = false;
@@ -1878,6 +1891,7 @@ if (result.success) {
                             stopTimer();
                             updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
                             addToHistory('🎉 All resources delivered!', 'success');
+                            calculateFinalScore(true);
                             gameState.gameEnded = true;
                             gameState.isRunning = false;
                             return;
@@ -1904,6 +1918,7 @@ if (result.success) {
                         gameState.playerDead = true;
                         gameState.gameEnded = true;
                         stopTimer();
+                        calculateFinalScore(false);
                         draw();
                         updateStatus('GAME OVER - You died!', 'dead');
                         gameState.isRunning = false;
@@ -1911,15 +1926,16 @@ if (result.success) {
                     }
                     break;
                 }
-                
+
                 if (gameState.delivered === gameState.totalResources) {
                     stopTimer();
                     updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
                     addToHistory('🎉 All resources delivered!', 'success');
+                    calculateFinalScore(true);
                     gameState.gameEnded = true;
                     gameState.isRunning = false;
-                    return;
-                }
+                            return;
+                        }
                 
                 await sleep(250);
             }
@@ -1931,6 +1947,7 @@ if (result.success) {
                     stopTimer();
                     updateStatus('Code execution complete. Resources remain undelivered!', 'failed');
                     addToHistory('Execution complete. Not all resources delivered.', 'error');
+                    calculateFinalScore(false);
                     gameState.gameEnded = true;
                 }
             }
@@ -2283,6 +2300,17 @@ if (result.success) {
             if (resource) {
                 resource.collected = true;
                 gameState.inventory.push(resource.color);
+                
+                // Check if this is the yellow coin from the door structure
+                if (resource.color === 'yellow' && gameState.doorStructure) {
+                    const insideX = gameState.doorStructure.inside.x;
+                    const insideY = gameState.doorStructure.inside.y;
+                    if (resource.x === insideX && resource.y === insideY) {
+                        gameState.yellowCoinCollected = true;
+                        addToHistory('🏆 Yellow coin from door structure collected! +1500 bonus points pending!', 'success');
+                    }
+                }
+                
                 updateStats();
                 return { success: true, message: `Collected ${resource.color} resource! (${gameState.inventory.length}/${MAX_INVENTORY})` };
             }
@@ -2381,6 +2409,51 @@ if (result.success) {
             gameState.startTime = null;
             gameState.elapsedTime = 0;
             updateStats();
+        }
+
+        // Calculate and display final score
+        function calculateFinalScore(success) {
+            const BASE_SCORE = 5000;
+            const SECONDS_PENALTY = 10;
+            const STEPS_PENALTY = 15;
+            const LINES_PENALTY = 35;
+            const YELLOW_COIN_BONUS = 1500;
+            
+            // Calculate time in seconds
+            const timeSeconds = Math.floor(gameState.elapsedTime / 1000);
+            
+            // Calculate penalties
+            const timePenalty = timeSeconds * SECONDS_PENALTY;
+            const stepsPenalty = gameState.steps * STEPS_PENALTY;
+            const linesPenalty = gameState.codeLines * LINES_PENALTY;
+            
+            // Calculate bonus
+            const yellowCoinBonus = gameState.yellowCoinCollected ? YELLOW_COIN_BONUS : 0;
+            
+            // Calculate final score
+            let finalScore = BASE_SCORE - timePenalty - stepsPenalty - linesPenalty + yellowCoinBonus;
+            
+            // Minimum score is 0
+            if (finalScore < 0) finalScore = 0;
+            
+            // Store the final score
+            gameState.finalScore = finalScore;
+            
+            // Display the score breakdown
+            let scoreMessage = '\n📊 FINAL SCORE BREAKDOWN:\n';
+            scoreMessage += `Base Score: +${BASE_SCORE}\n`;
+            scoreMessage += `Time Penalty (${timeSeconds}s): -${timePenalty}\n`;
+            scoreMessage += `Steps Penalty (${gameState.steps} steps): -${stepsPenalty}\n`;
+            scoreMessage += `Code Lines Penalty (${gameState.codeLines} lines): -${linesPenalty}\n`;
+            if (gameState.yellowCoinCollected) {
+                scoreMessage += `Yellow Coin Bonus: +${yellowCoinBonus}\n`;
+            }
+            scoreMessage += `━━━━━━━━━━━━━━━━━━\n`;
+            scoreMessage += `TOTAL SCORE: ${finalScore}`;
+            
+            addToHistory(scoreMessage, success ? 'success' : 'info');
+            
+            return finalScore;
         }
 
         function updateStatus(message, type) {
