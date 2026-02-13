@@ -1019,6 +1019,13 @@ Watch out for moving blocks!"></textarea>
             gameState.originalInventory = [];
             gameState.originalDelivered = 0;
             gameState.originalMovingBlocks = gameState.movingBlocks.map(b => ({ ...b }));
+            gameState.originalDoorStructure = gameState.doorStructure ? {
+                walls: gameState.doorStructure.walls.map(w => ({ ...w })),
+                door: { ...gameState.doorStructure.door },
+                inside: { ...gameState.doorStructure.inside },
+                isOpen: false,
+                labyrinthTriggered: false
+            } : null;
         }
 
         // Restart game with same layout
@@ -1032,12 +1039,21 @@ Watch out for moving blocks!"></textarea>
             gameState.resources = gameState.originalResources.map(r => ({ ...r }));
             gameState.grid = gameState.originalGrid.map(row => [...row]);
             gameState.movingBlocks = gameState.originalMovingBlocks.map(b => ({ ...b }));
+            gameState.doorStructure = gameState.originalDoorStructure ? {
+                walls: gameState.originalDoorStructure.walls.map(w => ({ ...w })),
+                door: { ...gameState.originalDoorStructure.door },
+                inside: { ...gameState.originalDoorStructure.inside },
+                isOpen: false,
+                labyrinthTriggered: false
+            } : null;
             gameState.inventory = [];
             gameState.delivered = 0;
             gameState.steps = 0;
             gameState.isRunning = false;
             gameState.gameEnded = false;
             gameState.playerDead = false;
+            gameState.labyrinthCompleted = false;
+            gameState.labyrinthActive = false;
             commandHistory = []; // Clear command history on restart
             
             clearHistory();
