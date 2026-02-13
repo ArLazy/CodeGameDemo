@@ -1846,7 +1846,11 @@ if (result.success) {
                             break;
                         }
                         
-                        if (gameState.delivered === gameState.totalResources) {
+                        const allResourcesDelivered = gameState.delivered === gameState.totalResources;
+                        const hasPinkCoin = gameState.resources.some(r => r.color === 'pink' && r.isBonusCoin);
+                        const pinkCoinDelivered = !hasPinkCoin || gameState.pinkCoinDelivered;
+                        
+                        if (allResourcesDelivered && pinkCoinDelivered) {
                             stopTimer();
                             updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
                             addToHistory('🎉 All resources delivered!', 'success');
@@ -1897,7 +1901,11 @@ if (result.success) {
                             break;
                         }
                         
-                        if (gameState.delivered === gameState.totalResources) {
+                        const allResourcesDelivered = gameState.delivered === gameState.totalResources;
+                        const hasPinkCoin = gameState.resources.some(r => r.color === 'pink' && r.isBonusCoin);
+                        const pinkCoinDelivered = !hasPinkCoin || gameState.pinkCoinDelivered;
+                        
+                        if (allResourcesDelivered && pinkCoinDelivered) {
                             stopTimer();
                             updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
                             addToHistory('🎉 All resources delivered!', 'success');
@@ -1937,7 +1945,10 @@ if (result.success) {
                     break;
                 }
 
-                if (gameState.delivered === gameState.totalResources) {
+                const allResourcesDelivered = gameState.delivered === gameState.totalResources;
+                const pinkCoinDelivered = !gameState.resources.some(r => r.color === 'pink' && r.isBonusCoin) || gameState.pinkCoinDelivered;
+                
+                if (allResourcesDelivered && pinkCoinDelivered) {
                     stopTimer();
                     updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
                     addToHistory('🎉 All resources delivered!', 'success');
@@ -1953,11 +1964,19 @@ if (result.success) {
             gameState.isRunning = false;
             
             if (!gameState.gameEnded) {
-                if (gameState.delivered < gameState.totalResources) {
+                const pinkCoinNotDelivered = gameState.resources.some(r => r.color === 'pink' && r.isBonusCoin && !r.delivered);
+                if (gameState.delivered < gameState.totalResources || pinkCoinNotDelivered) {
                     stopTimer();
                     updateStatus('Code execution complete. Resources remain undelivered!', 'failed');
                     addToHistory('Execution complete. Not all resources delivered.', 'error');
                     calculateFinalScore(false);
+                    gameState.gameEnded = true;
+                } else {
+                    // All code executed and all resources delivered (including pink coin)
+                    stopTimer();
+                    updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
+                    addToHistory('🎉 All resources delivered!', 'success');
+                    calculateFinalScore(true);
                     gameState.gameEnded = true;
                 }
             }
