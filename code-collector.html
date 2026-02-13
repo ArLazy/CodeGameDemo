@@ -109,6 +109,7 @@
         .item-yellow { background: #ffd700; }
         .item-green { background: #4ecca3; }
         .item-blue { background: #3498db; }
+        .item-pink { background: #ff69b4; }
 
         .inventory-empty {
             color: #555;
@@ -428,6 +429,10 @@
                         <span>Time:</span>
                         <span class="stat-value" id="timerDisplay">00:00</span>
                     </div>
+                    <div class="stat">
+                        <span>Pink coin:</span>
+                        <span class="stat-value" id="pinkCoinStatus">❌</span>
+                    </div>
                 </div>
                 
                 <div class="inventory">
@@ -649,7 +654,8 @@ Watch out for moving blocks!"></textarea>
             doorStructure: null,
             labyrinthCompleted: false,
             labyrinthActive: false,
-            yellowCoinCollected: false,
+            pinkCoinCollected: false,
+            pinkCoinDelivered: false,
             codeLines: 0,
             finalScore: null
         };
@@ -760,14 +766,15 @@ Watch out for moving blocks!"></textarea>
                 labyrinthTriggered: false
             };
             
-            // Add coin inside
-            gameState.grid[insidePos.y][insidePos.x] = 'resource_yellow';
+            // Add pink coin inside (special bonus coin)
+            gameState.grid[insidePos.y][insidePos.x] = 'resource_pink';
             gameState.resources.push({ 
                 x: insidePos.x, 
                 y: insidePos.y, 
-                color: 'yellow', 
+                color: 'pink', 
                 collected: false, 
-                delivered: false 
+                delivered: false,
+                isBonusCoin: true
             });
         }
 
@@ -827,7 +834,8 @@ Watch out for moving blocks!"></textarea>
             gameState.doorStructure = null;
             gameState.labyrinthCompleted = false;
             gameState.labyrinthActive = false;
-            gameState.yellowCoinCollected = false;
+            gameState.pinkCoinCollected = false;
+            gameState.pinkCoinDelivered = false;
             gameState.codeLines = 0;
             gameState.finalScore = null;
 
@@ -1066,7 +1074,8 @@ Watch out for moving blocks!"></textarea>
             gameState.playerDead = false;
             gameState.labyrinthCompleted = false;
             gameState.labyrinthActive = false;
-            gameState.yellowCoinCollected = false;
+            gameState.pinkCoinCollected = false;
+            gameState.pinkCoinDelivered = false;
             gameState.codeLines = 0;
             gameState.finalScore = null;
             
@@ -2301,14 +2310,10 @@ if (result.success) {
                 resource.collected = true;
                 gameState.inventory.push(resource.color);
                 
-                // Check if this is the yellow coin from the door structure
-                if (resource.color === 'yellow' && gameState.doorStructure) {
-                    const insideX = gameState.doorStructure.inside.x;
-                    const insideY = gameState.doorStructure.inside.y;
-                    if (resource.x === insideX && resource.y === insideY) {
-                        gameState.yellowCoinCollected = true;
-                        addToHistory('🏆 Yellow coin from door structure collected! +1500 bonus points pending!', 'success');
-                    }
+                // Check if this is the pink bonus coin from the door structure
+                if (resource.color === 'pink' && resource.isBonusCoin) {
+                    gameState.pinkCoinCollected = true;
+                    addToHistory('🏆 Pink bonus coin collected! Deliver to any drop zone for +1500 points!', 'success');
                 }
                 
                 updateStats();
@@ -2328,9 +2333,28 @@ if (result.success) {
                 return { success: false, message: 'Not on a delivery zone! Find a colored base.' };
             }
             
+            // Check if player has pink bonus coin - it can be delivered to any drop zone
+            const hasPinkCoin = gameState.inventory.includes('pink');
+            let pinkCoinDelivered = false;
+            
+            if (hasPinkCoin && !gameState.pinkCoinDelivered) {
+                // Remove pink coin from inventory
+                gameState.inventory = gameState.inventory.filter(color => color !== 'pink');
+                gameState.pinkCoinDelivered = true;
+                
+                const pinkResource = gameState.resources.find(
+                    r => r.color === 'pink' && r.collected && !r.delivered
+                );
+                if (pinkResource) {
+                    pinkResource.delivered = true;
+                }
+                
+                pinkCoinDelivered = true;
+            }
+            
             const matchingResources = gameState.inventory.filter(color => color === dropZone.color);
             
-            if (matchingResources.length === 0) {
+            if (matchingResources.length === 0 && !pinkCoinDelivered) {
                 return { success: false, message: `No ${dropZone.color} resources to deliver here!` };
             }
             
@@ -2353,7 +2377,16 @@ if (result.success) {
             });
             
             updateStats();
-            return { success: true, message: `Delivered ${deliveredCount} ${dropZone.color} resource(s)!` };
+            
+            let message = '';
+            if (deliveredCount > 0) {
+                message += `Delivered ${deliveredCount} ${dropZone.color} resource(s)! `;
+            }
+            if (pinkCoinDelivered) {
+                message += '🏆 Pink coin delivered! +1500 bonus points!';
+            }
+            
+            return { success: true, message: message.trim() };
         }
 
         // Utility functions
@@ -2377,6 +2410,19 @@ if (result.success) {
             
             document.getElementById('inventoryCount').textContent = 
                 `${gameState.inventory.length}/${MAX_INVENTORY}`;
+            
+            // Update pink coin status
+            const pinkCoinEl = document.getElementById('pinkCoinStatus');
+            if (gameState.pinkCoinDelivered) {
+                pinkCoinEl.textContent = '✓';
+                pinkCoinEl.style.color = '#ff69b4'; // Pink color
+            } else if (gameState.pinkCoinCollected) {
+                pinkCoinEl.textContent = '🎒';
+                pinkCoinEl.style.color = '#ff69b4';
+            } else {
+                pinkCoinEl.textContent = '❌';
+                pinkCoinEl.style.color = '#666';
+            }
             
             const inventoryItemsEl = document.getElementById('inventoryItems');
             if (gameState.inventory.length === 0) {
@@ -2413,11 +2459,11 @@ if (result.success) {
 
         // Calculate and display final score
         function calculateFinalScore(success) {
-            const BASE_SCORE = 5000;
+            const BASE_SCORE = 10000;
             const SECONDS_PENALTY = 10;
             const STEPS_PENALTY = 15;
             const LINES_PENALTY = 35;
-            const YELLOW_COIN_BONUS = 1500;
+            const PINK_COIN_BONUS = 1500;
             
             // Calculate time in seconds
             const timeSeconds = Math.floor(gameState.elapsedTime / 1000);
@@ -2428,10 +2474,10 @@ if (result.success) {
             const linesPenalty = gameState.codeLines * LINES_PENALTY;
             
             // Calculate bonus
-            const yellowCoinBonus = gameState.yellowCoinCollected ? YELLOW_COIN_BONUS : 0;
+            const pinkCoinBonus = gameState.pinkCoinDelivered ? PINK_COIN_BONUS : 0;
             
             // Calculate final score
-            let finalScore = BASE_SCORE - timePenalty - stepsPenalty - linesPenalty + yellowCoinBonus;
+            let finalScore = BASE_SCORE - timePenalty - stepsPenalty - linesPenalty + pinkCoinBonus;
             
             // Minimum score is 0
             if (finalScore < 0) finalScore = 0;
@@ -2445,8 +2491,8 @@ if (result.success) {
             scoreMessage += `Time Penalty (${timeSeconds}s): -${timePenalty}\n`;
             scoreMessage += `Steps Penalty (${gameState.steps} steps): -${stepsPenalty}\n`;
             scoreMessage += `Code Lines Penalty (${gameState.codeLines} lines): -${linesPenalty}\n`;
-            if (gameState.yellowCoinCollected) {
-                scoreMessage += `Yellow Coin Bonus: +${yellowCoinBonus}\n`;
+            if (gameState.pinkCoinDelivered) {
+                scoreMessage += `Pink Coin Bonus: +${pinkCoinBonus}\n`;
             }
             scoreMessage += `━━━━━━━━━━━━━━━━━━\n`;
             scoreMessage += `TOTAL SCORE: ${finalScore}`;
