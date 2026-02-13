@@ -425,8 +425,8 @@
                         <span class="stat-value" id="playerPos">0,0</span>
                     </div>
                     <div class="stat">
-                        <span>Health:</span>
-                        <span class="stat-value" id="healthStatus">OK</span>
+                        <span>Time:</span>
+                        <span class="stat-value" id="timerDisplay">00:00</span>
                     </div>
                 </div>
                 
@@ -637,6 +637,9 @@ Watch out for moving blocks!"></textarea>
             isRunning: false,
             gameEnded: false,
             playerDead: false,
+            startTime: null,
+            elapsedTime: 0,
+            timerInterval: null,
             originalPlayer: { x: 0, y: 0 },
             originalResources: [],
             originalGrid: [],
@@ -996,6 +999,9 @@ Watch out for moving blocks!"></textarea>
             
             saveOriginalState();
             
+            // Reset timer for new task
+            resetTimer();
+            
             clearHistory();
             addToHistory('New task generated!', 'info');
             addToHistory(`Collect ${gameState.totalResources} resources and deliver!`, 'info');
@@ -1054,6 +1060,10 @@ Watch out for moving blocks!"></textarea>
             gameState.playerDead = false;
             gameState.labyrinthCompleted = false;
             gameState.labyrinthActive = false;
+            
+            // Reset timer
+            resetTimer();
+            
             commandHistory = []; // Clear command history on restart
             
             clearHistory();
@@ -1721,9 +1731,15 @@ Watch out for moving blocks!"></textarea>
             clearHistory();
             addToHistory('Starting execution...', 'info');
             
+            // Start the timer
+            startTimer();
+            
             const lines = input.split('\n').map(line => line.trim()).filter(line => line);
             
             for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                // Wait if labyrinth is active
+                await waitForLabyrinth();
+                
                 const line = lines[lineIndex];
                 const parsed = parseCommand(line);
                 
@@ -1799,6 +1815,7 @@ if (result.success) {
                             if (result.dead) {
                                 gameState.playerDead = true;
                                 gameState.gameEnded = true;
+                                stopTimer();
                                 draw();
                                 updateStatus('GAME OVER - You died!', 'dead');
                                 gameState.isRunning = false;
@@ -1808,6 +1825,7 @@ if (result.success) {
                         }
                         
                         if (gameState.delivered === gameState.totalResources) {
+                            stopTimer();
                             updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
                             addToHistory('🎉 All resources delivered!', 'success');
                             gameState.gameEnded = true;
@@ -1847,6 +1865,7 @@ if (result.success) {
                             if (result.dead) {
                                 gameState.playerDead = true;
                                 gameState.gameEnded = true;
+                                stopTimer();
                                 draw();
                                 updateStatus('GAME OVER - You died!', 'dead');
                                 gameState.isRunning = false;
@@ -1856,6 +1875,7 @@ if (result.success) {
                         }
                         
                         if (gameState.delivered === gameState.totalResources) {
+                            stopTimer();
                             updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
                             addToHistory('🎉 All resources delivered!', 'success');
                             gameState.gameEnded = true;
@@ -1883,6 +1903,7 @@ if (result.success) {
                     if (result.dead) {
                         gameState.playerDead = true;
                         gameState.gameEnded = true;
+                        stopTimer();
                         draw();
                         updateStatus('GAME OVER - You died!', 'dead');
                         gameState.isRunning = false;
@@ -1892,6 +1913,7 @@ if (result.success) {
                 }
                 
                 if (gameState.delivered === gameState.totalResources) {
+                    stopTimer();
                     updateStatus(`SUCCESS! All resources delivered in ${gameState.steps} steps!`, 'success');
                     addToHistory('🎉 All resources delivered!', 'success');
                     gameState.gameEnded = true;
@@ -1906,6 +1928,7 @@ if (result.success) {
             
             if (!gameState.gameEnded) {
                 if (gameState.delivered < gameState.totalResources) {
+                    stopTimer();
                     updateStatus('Code execution complete. Resources remain undelivered!', 'failed');
                     addToHistory('Execution complete. Not all resources delivered.', 'error');
                     gameState.gameEnded = true;
@@ -1932,15 +1955,13 @@ if (result.success) {
                 return { success: false, message: `Cannot jump ${direction}: Out of bounds!` };
             }
 
-            // Check if the obstacle is part of the door structure (walls or door)
-            const isObstacleDoorRelated = gameState.doorStructure && (
-                (gameState.doorStructure.door.x === obstacleX && gameState.doorStructure.door.y === obstacleY) ||
-                gameState.doorStructure.walls.some(wall => wall.x === obstacleX && wall.y === obstacleY)
-            );
+            // Check if the obstacle is the closed door position (cannot jump over locked door)
+            const isClosedDoorObstacle = gameState.doorStructure && gameState.doorStructure.isOpen === false &&
+                gameState.doorStructure.door.x === obstacleX && gameState.doorStructure.door.y === obstacleY;
 
-            // If the obstacle is part of the door structure, jumping is not allowed
-            if (isObstacleDoorRelated) {
-                return { success: false, message: `Cannot jump ${direction}: Door structure blocks the way!` };
+            // If trying to jump over the locked door, it's not allowed
+            if (isClosedDoorObstacle) {
+                return { success: false, message: `Cannot jump ${direction}: Door is locked! Complete the labyrinth to open it.` };
             }
 
             // Check if the obstacle cell is a wall, danger zone, or teleporter
@@ -1957,8 +1978,16 @@ if (result.success) {
 
                 // Check if landing position is blocked by something that can't be jumped over
                 const landingCell = gameState.grid[landingY][landingX];
-                if (landingCell === 'wall' || landingCell === 'danger' || landingCell.startsWith('drop_') || landingCell === 'moving_block') {
+                if (landingCell === 'wall' || landingCell === 'danger' || landingCell === 'moving_block') {
                     return { success: false, message: `Cannot jump ${direction}: Path blocked after obstacle!` };
+                }
+                
+                // Check if trying to land inside a closed door structure
+                const isLandingInside = gameState.doorStructure && gameState.doorStructure.isOpen === false &&
+                    gameState.doorStructure.inside.x === landingX && gameState.doorStructure.inside.y === landingY;
+                
+                if (isLandingInside) {
+                    return { success: false, message: `Cannot jump ${direction}: Door is locked! Complete the labyrinth to enter.` };
                 }
 
                 // Perform the jump - move to the landing position
@@ -1967,6 +1996,9 @@ if (result.success) {
                 
                 // Check if player stepped on door at landing position
                 checkDoor();
+                
+                // Wait for labyrinth to complete if it's active
+                await waitForLabyrinth();
 
                 // Check for teleporter after landing
                 const teleportResult = checkTeleporter();
@@ -2020,13 +2052,11 @@ if (result.success) {
                     break;
                 }
                 
-                // Check if the target cell is part of the door structure (walls or door when closed)
-                const isTargetDoorRelated = gameState.doorStructure && !gameState.doorStructure.isOpen && (
-                    (gameState.doorStructure.door.x === newX && gameState.doorStructure.door.y === newY) ||
-                    gameState.doorStructure.walls.some(wall => wall.x === newX && wall.y === newY)
-                );
+                // Check if trying to enter the inside of a closed door structure
+                const isTryingToEnterInside = gameState.doorStructure && gameState.doorStructure.isOpen === false &&
+                    gameState.doorStructure.inside.x === newX && gameState.doorStructure.inside.y === newY;
 
-                if (gameState.grid[newY][newX] === 'wall' || isTargetDoorRelated) {
+                if (gameState.grid[newY][newX] === 'wall' || isTryingToEnterInside) {
                     break;
                 }
                 
@@ -2094,6 +2124,9 @@ if (result.success) {
                 
                 // Check if player stepped on door
                 checkDoor();
+                
+                // Wait for labyrinth to complete if it's active
+                await waitForLabyrinth();
                 
                 await sleep(200);
                 
@@ -2186,14 +2219,21 @@ if (result.success) {
                 return { success: false, message: 'Cannot move: Out of bounds!' };
             }
 
-            // Check if the target cell is part of the door structure (walls or door when closed)
-            const isTargetDoorRelated = gameState.doorStructure && !gameState.doorStructure.isOpen && (
-                (gameState.doorStructure.door.x === newX && gameState.doorStructure.door.y === newY) ||
-                gameState.doorStructure.walls.some(wall => wall.x === newX && wall.y === newY)
-            );
-
-            if (isTargetDoorRelated) {
-                return { success: false, message: 'Cannot move: Door structure blocks the way!' };
+            // Check if trying to enter the door structure through a closed door
+            // Player can stand on the door, but cannot enter the inside when door is closed
+            const hasDoorStructure = !!gameState.doorStructure;
+            const isDoorOpen = gameState.doorStructure ? gameState.doorStructure.isOpen : null;
+            const doorX = gameState.doorStructure ? gameState.doorStructure.door.x : null;
+            const doorY = gameState.doorStructure ? gameState.doorStructure.door.y : null;
+            const insideX = gameState.doorStructure ? gameState.doorStructure.inside.x : null;
+            const insideY = gameState.doorStructure ? gameState.doorStructure.inside.y : null;
+            
+            // Block entry to inside when door is closed
+            const isTryingToEnterInside = hasDoorStructure && isDoorOpen === false &&
+                newX === insideX && newY === insideY;
+            
+            if (isTryingToEnterInside) {
+                return { success: false, message: 'Cannot move: Door is locked! Complete the labyrinth to open it.' };
             }
 
             if (gameState.grid[newY][newX] === 'wall') {
@@ -2299,10 +2339,13 @@ if (result.success) {
             document.getElementById('stepCount').textContent = gameState.steps;
             document.getElementById('playerPos').textContent = 
                 `${gameState.player.x},${gameState.player.y}`;
-            document.getElementById('healthStatus').textContent = 
-                gameState.playerDead ? 'DEAD' : 'OK';
-            document.getElementById('healthStatus').style.color = 
-                gameState.playerDead ? '#ff4444' : '#4ecca3';
+            
+            // Update timer display
+            const totalSeconds = Math.floor(gameState.elapsedTime / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const timerText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            document.getElementById('timerDisplay').textContent = timerText;
             
             document.getElementById('inventoryCount').textContent = 
                 `${gameState.inventory.length}/${MAX_INVENTORY}`;
@@ -2315,6 +2358,29 @@ if (result.success) {
                     `<div class="inventory-item item-${color}"></div>`
                 ).join('');
             }
+        }
+
+        function startTimer() {
+            if (gameState.timerInterval) return;
+            gameState.startTime = Date.now() - gameState.elapsedTime;
+            gameState.timerInterval = setInterval(() => {
+                gameState.elapsedTime = Date.now() - gameState.startTime;
+                updateStats();
+            }, 100);
+        }
+
+        function stopTimer() {
+            if (gameState.timerInterval) {
+                clearInterval(gameState.timerInterval);
+                gameState.timerInterval = null;
+            }
+        }
+
+        function resetTimer() {
+            stopTimer();
+            gameState.startTime = null;
+            gameState.elapsedTime = 0;
+            updateStats();
         }
 
         function updateStatus(message, type) {
@@ -2342,12 +2408,19 @@ if (result.success) {
             addToHistory('Console cleared.', 'info');
         }
 
+        // Wait for labyrinth to complete
+        async function waitForLabyrinth() {
+            while (gameState.labyrinthActive) {
+                await sleep(100);
+            }
+        }
+
         // Check if player is on the door and trigger labyrinth
         function checkDoor() {
             if (!gameState.doorStructure || gameState.doorStructure.labyrinthTriggered || gameState.doorStructure.isOpen) {
                 return;
             }
-            
+
             const door = gameState.doorStructure.door;
             if (gameState.player.x === door.x && gameState.player.y === door.y) {
                 // Player is on door - trigger labyrinth minigame
